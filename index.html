@@ -7,9 +7,9 @@
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { margin: 0; font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
-         background: #f4f6f8; color: #1f2937; padding: 20px 16px; }
-  .card { background: #fff; border-radius: 14px; padding: 20px; max-width: 420px; margin: 0 auto;
-          box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+         background: #f4f6f8; color: #1f2937; padding: 16px; }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
   h1 { font-size: 20px; margin: 0 0 4px; }
   .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
   .site { background: #e8f5f0; color: #0f6e56; border-radius: 10px; padding: 12px 14px;
@@ -23,8 +23,8 @@
   .gps.ok { background: #e8f5f0; color: #0f6e56; }
   .gps.err { background: #fdecea; color: #b91c1c; }
   .btns { display: flex; gap: 12px; margin-top: 18px; }
-  button { flex: 1; border: none; border-radius: 12px; padding: 18px 0; font-size: 18px;
-           font-weight: bold; color: #fff; font-family: inherit; }
+  .btns button { flex: 1; border: none; border-radius: 12px; padding: 18px 0; font-size: 18px;
+                 font-weight: bold; color: #fff; font-family: inherit; }
   .in { background: #1d9e75; } .out { background: #d97706; }
   button:disabled { opacity: .5; }
   .result { margin-top: 16px; padding: 14px; border-radius: 10px; font-size: 15px;
@@ -33,146 +33,123 @@
   .result.good { background: #e8f5f0; color: #0f6e56; }
   .result.bad { background: #fdecea; color: #b91c1c; }
   .who { font-size: 12px; color: #9ca3af; text-align: center; margin-top: 14px; }
-  #dbg { margin-top: 16px; padding: 10px; border-radius: 8px; background: #111827; color: #d1d5db;
-         font-family: monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap;
-         word-break: break-all; }
+
+  .date { color: #6b7280; font-size: 13px; margin-bottom: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+  .stat { background: #fff; border-radius: 10px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .stat b { display: block; font-size: 22px; font-weight: bold; }
+  .stat span { font-size: 11px; color: #6b7280; }
+  .stat.warn b { color: #d97706; } .stat.bad b { color: #b91c1c; }
+  h2 { font-size: 15px; margin: 18px 0 8px; }
+  .arow { background: #fff; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.06); font-size: 14px; }
+  .row { display: flex; justify-content: space-between; align-items: center; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .tag.ok { background: #e8f5f0; color: #0f6e56; }
+  .tag.bad { background: #fdecea; color: #b91c1c; }
+  .tag.wait { background: #fff4e0; color: #b45309; }
+  .pend { border-left: 3px solid #f59e0b; }
+  .pbtns { display: flex; gap: 8px; margin-top: 10px; }
+  .pbtns button { flex: 1; border: none; border-radius: 8px; padding: 10px 0; font-size: 14px; font-weight: bold; color: #fff; font-family: inherit; }
+  .approve { background: #1d9e75; } .reject { background: #d97706; }
+  .refresh { width: 100%; border: 1px solid #d1d5db; background: #fff; border-radius: 10px; padding: 12px; font-size: 14px; font-family: inherit; margin-top: 8px; }
+  .empty { color: #9ca3af; font-size: 13px; padding: 8px 0; }
+  .uid { font-family: monospace; font-size: 12px; background: #f3f4f6; padding: 8px; border-radius: 6px; word-break: break-all; margin: 8px 0; }
 </style>
 </head>
 <body>
-<div class="card">
-  <h1>公司打卡</h1>
-  <div class="sub" id="sub">載入中…</div>
+<div class="wrap" id="wrap"><div class="card"><div class="sub" id="boot">載入中…</div></div></div>
 
-  <div class="site" id="siteBox">—</div>
-
-  <div id="reasonWrap" style="display:none">
-    <label>外勤事由（必填）</label>
-    <textarea id="reason" rows="2" placeholder="例：送件市政府 / 拜訪業主"></textarea>
+<template id="punchTpl">
+  <div class="card">
+    <h1>公司打卡</h1>
+    <div class="sub" id="sub">請確認地點後打卡</div>
+    <div class="site" id="siteBox">—</div>
+    <div id="reasonWrap" style="display:none">
+      <label>外勤事由（必填）</label>
+      <textarea id="reason" rows="2" placeholder="例：送件市政府 / 拜訪業主"></textarea>
+    </div>
+    <div class="gps" id="gps">定位中…</div>
+    <div class="btns">
+      <button class="in" id="btnIn" disabled>上班</button>
+      <button class="out" id="btnOut" disabled>下班</button>
+    </div>
+    <div class="result" id="result"></div>
+    <div class="who" id="who"></div>
   </div>
-
-  <div class="gps" id="gps">定位中…</div>
-
-  <div class="btns">
-    <button class="in" id="btnIn" disabled onclick="punch('上班')">上班</button>
-    <button class="out" id="btnOut" disabled onclick="punch('下班')">下班</button>
-  </div>
-
-  <div class="result" id="result"></div>
-  <div class="who" id="who"></div>
-  <div id="dbg">診斷訊息：</div>
-</div>
+</template>
 
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
   var LIFF_ID = "2011018188-xd2VsV0A";
   var GAS_URL = "https://script.google.com/macros/s/AKfycbydMPZ2v8XYeV_5-L8GKV5CjS21j9Z_9g3_8CBZHWgb0Bx09bBrRUG7Y9vN_1K2oWk/exec";
 
-  var params = getParams();
-  var MODE = params.mode, SITE = params.site, SITE_NAME = params.name;
-  var isField = (MODE === 'field');
+  var P = getParams();
   var me = { userId: '', displayName: '' };
   var pos = { lat: null, lng: null };
-  var gotProfile = false;
-
-  function log(s) { document.getElementById('dbg').textContent += '\n' + s; }
-  window.addEventListener('error', function (e) { log('JS錯誤: ' + e.message); });
-  window.addEventListener('unhandledrejection', function (e) { log('Promise錯誤: ' + (e.reason && e.reason.message || e.reason)); });
 
   function getParams() {
     var p = new URLSearchParams(location.search);
-    var s = p.get('site'), n = p.get('name'), m = p.get('mode');
-    if ((!s && !m) && p.get('liff.state')) {
+    var o = { site: p.get('site'), name: p.get('name'), mode: p.get('mode'), view: p.get('view') };
+    if (!o.site && !o.mode && !o.view && p.get('liff.state')) {
       var st = new URLSearchParams(p.get('liff.state').replace(/^\?/, ''));
-      s = st.get('site'); n = st.get('name'); m = st.get('mode');
+      o = { site: st.get('site'), name: st.get('name'), mode: st.get('mode'), view: st.get('view') };
     }
-    return { site: s || '', name: n || '', mode: m || '' };
+    return { site: o.site || '', name: o.name || '', mode: o.mode || '', view: o.view || '' };
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }); }
+  function post(body) {
+    return fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); });
   }
 
-  log('LIFF_ID=' + LIFF_ID);
-  log('參數 mode=' + MODE + ' site=' + SITE + ' name=' + SITE_NAME);
+  liff.init({ liffId: LIFF_ID }).then(function () {
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    return liff.getProfile();
+  }).then(function (p) {
+    if (!p) return;
+    me.userId = p.userId; me.displayName = p.displayName;
+    if (P.view === 'admin') startAdmin(); else startPunch();
+  }).catch(function (e) {
+    document.getElementById('boot').textContent = '初始化失敗：' + e;
+  });
 
-  var siteBox = document.getElementById('siteBox');
-  if (isField) {
-    siteBox.className = 'site field';
-    siteBox.textContent = '🚗 外勤打卡';
-    document.getElementById('reasonWrap').style.display = 'block';
-  } else {
-    siteBox.textContent = '📍 ' + (SITE_NAME || SITE || '未指定工地');
-  }
-
-  function setGps(txt, cls) {
-    var el = document.getElementById('gps');
-    el.textContent = txt; el.className = 'gps' + (cls ? ' ' + cls : '');
-  }
-  function maybeReady() {
-    if (gotProfile) {
-      document.getElementById('btnIn').disabled = false;
-      document.getElementById('btnOut').disabled = false;
+  function startPunch() {
+    var tpl = document.getElementById('punchTpl').content.cloneNode(true);
+    var w = document.getElementById('wrap'); w.innerHTML = ''; w.appendChild(tpl);
+    var isField = (P.mode === 'field');
+    var siteBox = document.getElementById('siteBox');
+    if (isField) {
+      siteBox.className = 'site field'; siteBox.textContent = '🚗 外勤打卡';
+      document.getElementById('reasonWrap').style.display = 'block';
+    } else {
+      siteBox.textContent = '📍 ' + (P.name || P.site || '未指定工地');
     }
+    document.getElementById('who').textContent = '打卡人：' + me.displayName;
+    document.getElementById('btnIn').onclick = function () { punch('上班', isField); };
+    document.getElementById('btnOut').onclick = function () { punch('下班', isField); };
+    locate();
   }
 
-  locate();
-
-  if (!window.liff) {
-    log('SDK 未載入');
-    document.getElementById('sub').textContent = '無法載入 LINE 環境';
-  } else {
-    log('SDK 已載入，開始 init');
-    liff.init({ liffId: LIFF_ID }).then(function () {
-      log('init 成功  isInClient=' + liff.isInClient() + ' isLoggedIn=' + liff.isLoggedIn());
-      if (!liff.isLoggedIn()) { log('未登入 → login()'); liff.login(); return; }
-      return liff.getProfile();
-    }).then(function (p) {
-      if (!p) return;
-      me.userId = p.userId; me.displayName = p.displayName;
-      gotProfile = true;
-      log('取得身分: ' + p.displayName);
-      document.getElementById('sub').textContent = '請確認地點後打卡';
-      document.getElementById('who').textContent = '打卡人：' + p.displayName;
-      maybeReady();
-    }).catch(function (e) {
-      log('init/profile 失敗: ' + (e && e.message ? e.message : e));
-      document.getElementById('sub').textContent = '初始化失敗（見下方診斷）';
-    });
-  }
-
+  function setGps(txt, cls) { var el = document.getElementById('gps'); el.textContent = txt; el.className = 'gps' + (cls ? ' ' + cls : ''); }
+  function ready() { document.getElementById('btnIn').disabled = false; document.getElementById('btnOut').disabled = false; }
   function locate() {
-    if (!navigator.geolocation) { setGps('此裝置不支援定位', 'err'); return; }
+    if (!navigator.geolocation) { setGps('此裝置不支援定位，仍可打卡', 'err'); ready(); return; }
     navigator.geolocation.getCurrentPosition(function (r) {
-      pos.lat = r.coords.latitude; pos.lng = r.coords.longitude;
-      setGps('✓ 已取得定位', 'ok');
-      log('GPS: ' + r.coords.latitude.toFixed(5) + ', ' + r.coords.longitude.toFixed(5));
-    }, function (err) {
-      setGps('未取得定位（' + err.message + '）', 'err');
-      log('GPS 失敗: ' + err.message);
-    }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+      pos.lat = r.coords.latitude; pos.lng = r.coords.longitude; setGps('✓ 已取得定位', 'ok'); ready();
+    }, function (err) { setGps('未取得定位（' + err.message + '）', 'err'); ready(); },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
   }
-
-  function punch(type) {
+  function punch(type, isField) {
     var reason = isField ? document.getElementById('reason').value.trim() : '';
     if (isField && !reason) { alert('外勤打卡請填寫事由'); return; }
-    document.getElementById('btnIn').disabled = true;
-    document.getElementById('btnOut').disabled = true;
-    log('送出打卡: ' + type);
-
-    var payload = {
-      userId: me.userId, displayName: me.displayName,
-      mode: MODE, site: SITE, siteName: SITE_NAME,
-      punchType: type, lat: pos.lat, lng: pos.lng,
-      reason: reason, device: navigator.platform + ' / LINE'
-    };
-    fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.json(); })
-      .then(onDone)
-      .catch(function (e) { showResult(false, '送出失敗：' + e); log('傳送失敗: ' + e); maybeReady(); });
+    document.getElementById('btnIn').disabled = true; document.getElementById('btnOut').disabled = true;
+    post({ userId: me.userId, displayName: me.displayName, mode: P.mode, site: P.site, siteName: P.name,
+           punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, device: navigator.platform + ' / LINE' })
+      .then(onDone).catch(function (e) { showResult(false, '送出失敗：' + e); ready(); });
   }
-
   function onDone(res) {
-    log('回應: ' + JSON.stringify(res));
-    if (!res || !res.ok) { showResult(false, (res && res.msg) || '打卡失敗'); maybeReady(); return; }
+    if (!res || !res.ok) { showResult(false, (res && res.msg) || '打卡失敗'); ready(); return; }
     var t = '打卡成功　' + res.time;
     if (res.status === '待核准') t = '外勤已送出，待主管核准';
     else if (res.status !== '正常') t = '已記錄，定位異常（' + res.status + '）';
@@ -180,11 +157,58 @@
     showResult(res.status === '正常' || res.status === '待核准', t);
     setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 2500);
   }
+  function showResult(good, txt) { var el = document.getElementById('result'); el.textContent = txt; el.className = 'result show ' + (good ? 'good' : 'bad'); }
 
-  function showResult(good, txt) {
-    var el = document.getElementById('result');
-    el.textContent = txt;
-    el.className = 'result show ' + (good ? 'good' : 'bad');
+  function startAdmin() { loadDashboard(); }
+  function loadDashboard() {
+    document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入後台…</div></div>';
+    post({ action: 'dashboard', uid: me.userId }).then(renderAdmin)
+      .catch(function (e) { document.getElementById('wrap').innerHTML = '<div class="card">讀取失敗：' + esc(e) + '</div>'; });
+  }
+  function renderAdmin(d) {
+    var w = document.getElementById('wrap');
+    if (!d || !d.ok) { w.innerHTML = '<div class="card">讀取失敗</div>'; return; }
+    if (!d.isAdmin) {
+      w.innerHTML = '<div class="card"><h1>無檢視權限</h1>' +
+        '<p class="muted">此後台僅限管理員。若你是主管，請把下面的 userId 填入「員工名冊」的 LINE_userId 欄，並把該員工設為經理／角色管理員：</p>' +
+        '<div class="uid">' + esc(d.uid) + '</div></div>';
+      return;
+    }
+    var s = d.stats;
+    var html = '<h1>打卡管理後台</h1><div class="date">' + esc(d.date) + '　管理員：' + esc(d.name) + '</div>';
+    html += '<div class="stats">' + stat(s.active, '在職', '') + stat(s.punchedIn, '已上班', '') +
+      stat(s.active - s.punchedIn, '未打卡', 'warn') + stat(s.pending, '待核准', 'bad') + '</div>';
+    html += '<h2>待核准外勤（' + d.pending.length + '）</h2>';
+    if (!d.pending.length) html += '<div class="empty">目前沒有待核准項目</div>';
+    d.pending.forEach(function (p) {
+      html += '<div class="arow pend"><div class="row"><b>' + esc(p.name) + '</b><span class="muted">' + esc(p.time) + '</span></div>' +
+        '<div class="muted">事由：' + esc(p.reason) + '</div><div class="pbtns">' +
+        '<button class="approve" data-id="' + esc(p.recordId) + '" data-d="approve">核准</button>' +
+        '<button class="reject" data-id="' + esc(p.recordId) + '" data-d="reject">退回</button></div></div>';
+    });
+    html += '<h2>今日打卡（' + d.today.length + '）</h2>';
+    if (!d.today.length) html += '<div class="empty">今天還沒有人打卡</div>';
+    d.today.forEach(function (r) {
+      var cls = r.status === '正常' ? 'ok' : (r.status === '待核准' ? 'wait' : 'bad');
+      html += '<div class="arow"><div class="row"><span><b>' + esc(r.name) + '</b> <span class="muted">' + esc(r.type) + ' ' + esc(r.time) + '</span></span>' +
+        '<span class="tag ' + cls + '">' + esc(r.status) + '</span></div>' +
+        '<div class="muted">' + esc(r.site) + (r.distance !== '' ? '　' + esc(r.distance) + 'm' : '') + '</div></div>';
+    });
+    html += '<h2>未打卡名單（' + d.missing.length + '）</h2>';
+    html += d.missing.length ? '<div class="arow">' + d.missing.map(esc).join('、') + '</div>' : '<div class="empty">全員已打上班卡 ✅</div>';
+    html += '<button class="refresh" id="refreshBtn">↻ 重新整理</button>';
+    w.innerHTML = html;
+    document.getElementById('refreshBtn').onclick = loadDashboard;
+    Array.prototype.forEach.call(document.querySelectorAll('.pbtns button'), function (b) {
+      b.onclick = function () { decide(b.getAttribute('data-id'), b.getAttribute('data-d')); };
+    });
+  }
+  function stat(n, label, cls) { return '<div class="stat ' + cls + '"><b>' + n + '</b><span>' + label + '</span></div>'; }
+  function decide(recordId, decision) {
+    post({ action: 'approve', uid: me.userId, recordId: recordId, decision: decision }).then(function (res) {
+      if (!res.ok) { alert('操作失敗：' + (res.msg || '')); return; }
+      loadDashboard();
+    });
   }
 </script>
 </body>
