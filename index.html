@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>公司打卡</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+         background: #f4f6f8; color: #1f2937; padding: 20px 16px; }
+  .card { background: #fff; border-radius: 14px; padding: 20px; max-width: 420px; margin: 0 auto;
+          box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+  .site { background: #e8f5f0; color: #0f6e56; border-radius: 10px; padding: 12px 14px;
+          font-size: 16px; font-weight: bold; margin-bottom: 14px; }
+  .site.field { background: #fff4e0; color: #b45309; }
+  label { font-size: 13px; color: #374151; display: block; margin: 12px 0 6px; }
+  textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 10px; padding: 12px;
+             font-size: 15px; font-family: inherit; }
+  .gps { font-size: 13px; padding: 10px 12px; border-radius: 10px; background: #f3f4f6;
+         color: #4b5563; margin: 14px 0; }
+  .gps.ok { background: #e8f5f0; color: #0f6e56; }
+  .gps.err { background: #fdecea; color: #b91c1c; }
+  .btns { display: flex; gap: 12px; margin-top: 18px; }
+  button { flex: 1; border: none; border-radius: 12px; padding: 18px 0; font-size: 18px;
+           font-weight: bold; color: #fff; font-family: inherit; }
+  .in { background: #1d9e75; } .out { background: #d97706; }
+  button:disabled { opacity: .5; }
+  .result { margin-top: 16px; padding: 14px; border-radius: 10px; font-size: 15px;
+            text-align: center; display: none; }
+  .result.show { display: block; }
+  .result.good { background: #e8f5f0; color: #0f6e56; }
+  .result.bad { background: #fdecea; color: #b91c1c; }
+  .who { font-size: 12px; color: #9ca3af; text-align: center; margin-top: 14px; }
+  #dbg { margin-top: 16px; padding: 10px; border-radius: 8px; background: #111827; color: #d1d5db;
+         font-family: monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap;
+         word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>公司打卡</h1>
+  <div class="sub" id="sub">載入中…</div>
+
+  <div class="site" id="siteBox">—</div>
+
+  <div id="reasonWrap" style="display:none">
+    <label>外勤事由（必填）</label>
+    <textarea id="reason" rows="2" placeholder="例：送件市政府 / 拜訪業主"></textarea>
+  </div>
+
+  <div class="gps" id="gps">定位中…</div>
+
+  <div class="btns">
+    <button class="in" id="btnIn" disabled onclick="punch('上班')">上班</button>
+    <button class="out" id="btnOut" disabled onclick="punch('下班')">下班</button>
+  </div>
+
+  <div class="result" id="result"></div>
+  <div class="who" id="who"></div>
+  <div id="dbg">診斷訊息：</div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  var LIFF_ID = "2011018188-xd2VsV0A";
+  var GAS_URL = "https://script.google.com/macros/s/AKfycbydMPZ2v8XYeV_5-L8GKV5CjS21j9Z_9g3_8CBZHWgb0Bx09bBrRUG7Y9vN_1K2oWk/exec";
+
+  var params = getParams();
+  var MODE = params.mode, SITE = params.site, SITE_NAME = params.name;
+  var isField = (MODE === 'field');
+  var me = { userId: '', displayName: '' };
+  var pos = { lat: null, lng: null };
+  var gotProfile = false;
+
+  function log(s) { document.getElementById('dbg').textContent += '\n' + s; }
+  window.addEventListener('error', function (e) { log('JS錯誤: ' + e.message); });
+  window.addEventListener('unhandledrejection', function (e) { log('Promise錯誤: ' + (e.reason && e.reason.message || e.reason)); });
+
+  function getParams() {
+    var p = new URLSearchParams(location.search);
+    var s = p.get('site'), n = p.get('name'), m = p.get('mode');
+    if ((!s && !m) && p.get('liff.state')) {
+      var st = new URLSearchParams(p.get('liff.state').replace(/^\?/, ''));
+      s = st.get('site'); n = st.get('name'); m = st.get('mode');
+    }
+    return { site: s || '', name: n || '', mode: m || '' };
+  }
+
+  log('LIFF_ID=' + LIFF_ID);
+  log('參數 mode=' + MODE + ' site=' + SITE + ' name=' + SITE_NAME);
+
+  var siteBox = document.getElementById('siteBox');
+  if (isField) {
+    siteBox.className = 'site field';
+    siteBox.textContent = '🚗 外勤打卡';
+    document.getElementById('reasonWrap').style.display = 'block';
+  } else {
+    siteBox.textContent = '📍 ' + (SITE_NAME || SITE || '未指定工地');
+  }
+
+  function setGps(txt, cls) {
+    var el = document.getElementById('gps');
+    el.textContent = txt; el.className = 'gps' + (cls ? ' ' + cls : '');
+  }
+  function maybeReady() {
+    if (gotProfile) {
+      document.getElementById('btnIn').disabled = false;
+      document.getElementById('btnOut').disabled = false;
+    }
+  }
+
+  locate();
+
+  if (!window.liff) {
+    log('SDK 未載入');
+    document.getElementById('sub').textContent = '無法載入 LINE 環境';
+  } else {
+    log('SDK 已載入，開始 init');
+    liff.init({ liffId: LIFF_ID }).then(function () {
+      log('init 成功  isInClient=' + liff.isInClient() + ' isLoggedIn=' + liff.isLoggedIn());
+      if (!liff.isLoggedIn()) { log('未登入 → login()'); liff.login(); return; }
+      return liff.getProfile();
+    }).then(function (p) {
+      if (!p) return;
+      me.userId = p.userId; me.displayName = p.displayName;
+      gotProfile = true;
+      log('取得身分: ' + p.displayName);
+      document.getElementById('sub').textContent = '請確認地點後打卡';
+      document.getElementById('who').textContent = '打卡人：' + p.displayName;
+      maybeReady();
+    }).catch(function (e) {
+      log('init/profile 失敗: ' + (e && e.message ? e.message : e));
+      document.getElementById('sub').textContent = '初始化失敗（見下方診斷）';
+    });
+  }
+
+  function locate() {
+    if (!navigator.geolocation) { setGps('此裝置不支援定位', 'err'); return; }
+    navigator.geolocation.getCurrentPosition(function (r) {
+      pos.lat = r.coords.latitude; pos.lng = r.coords.longitude;
+      setGps('✓ 已取得定位', 'ok');
+      log('GPS: ' + r.coords.latitude.toFixed(5) + ', ' + r.coords.longitude.toFixed(5));
+    }, function (err) {
+      setGps('未取得定位（' + err.message + '）', 'err');
+      log('GPS 失敗: ' + err.message);
+    }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+  }
+
+  function punch(type) {
+    var reason = isField ? document.getElementById('reason').value.trim() : '';
+    if (isField && !reason) { alert('外勤打卡請填寫事由'); return; }
+    document.getElementById('btnIn').disabled = true;
+    document.getElementById('btnOut').disabled = true;
+    log('送出打卡: ' + type);
+
+    var payload = {
+      userId: me.userId, displayName: me.displayName,
+      mode: MODE, site: SITE, siteName: SITE_NAME,
+      punchType: type, lat: pos.lat, lng: pos.lng,
+      reason: reason, device: navigator.platform + ' / LINE'
+    };
+    fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    }).then(function (r) { return r.json(); })
+      .then(onDone)
+      .catch(function (e) { showResult(false, '送出失敗：' + e); log('傳送失敗: ' + e); maybeReady(); });
+  }
+
+  function onDone(res) {
+    log('回應: ' + JSON.stringify(res));
+    if (!res || !res.ok) { showResult(false, (res && res.msg) || '打卡失敗'); maybeReady(); return; }
+    var t = '打卡成功　' + res.time;
+    if (res.status === '待核准') t = '外勤已送出，待主管核准';
+    else if (res.status !== '正常') t = '已記錄，定位異常（' + res.status + '）';
+    else if (res.distance !== '') t += '（距工地 ' + res.distance + ' 公尺）';
+    showResult(res.status === '正常' || res.status === '待核准', t);
+    setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 2500);
+  }
+
+  function showResult(good, txt) {
+    var el = document.getElementById('result');
+    el.textContent = txt;
+    el.className = 'result show ' + (good ? 'good' : 'bad');
+  }
+</script>
+</body>
+</html>
