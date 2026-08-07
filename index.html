@@ -61,6 +61,14 @@
   .refresh { width: 100%; border: 1px solid #d1d5db; background: #fff; border-radius: 10px; padding: 12px; font-size: 14px; font-family: inherit; margin-top: 8px; }
   .empty { color: #9ca3af; font-size: 13px; padding: 8px 0; }
   .uid { font-family: monospace; font-size: 12px; background: #f3f4f6; padding: 8px; border-radius: 6px; word-break: break-all; margin: 8px 0; }
+  h3 { font-size: 14px; margin: 14px 0 6px; }
+  .sitegrp { margin-bottom: 10px; }
+  table.att { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border-radius: 8px; overflow: hidden; }
+  table.att th, table.att td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: center; }
+  table.att th { background: #f1f5f9; }
+  table.att td.nm { text-align: left; }
+  table.att tr.miss td { color: #b91c1c; }
+  #siteFilter { margin-bottom: 10px; }
 </style>
 </head>
 <body>
@@ -325,34 +333,36 @@
     }
     var s = d.stats;
     var html = '<h1>打卡狀況</h1><div class="date">' + esc(d.date) + '　' + esc(d.name) + '</div>';
-    html += '<div class="stats">' + stat(s.active, '需打卡', '') + stat(s.punchedIn, '已上班', '') +
-      stat(s.missing, '未打卡', 'warn') + stat(s.pending, '待核准', 'bad') + '</div>';
-
-    d.sites.forEach(function (g) {
-      html += '<h2>📍 ' + esc(g.site) + '（' + g.rows.length + '）</h2>';
-      if (!g.rows.length) html += '<div class="empty">尚無打卡</div>';
-      g.rows.forEach(function (r) {
-        var cls = r.status === '正常' ? 'ok' : (r.status === '待核准' ? 'wait' : 'bad');
-        html += '<div class="arow"><div class="row"><span><b>' + esc(r.name) + '</b> <span class="muted">' + esc(r.type) + ' ' + esc(r.time) + '</span></span>' +
-          '<span class="tag ' + cls + '">' + esc(r.status) + '</span></div>' +
-          (r.distance !== '' ? '<div class="muted">' + esc(r.distance) + 'm</div>' : '') + '</div>';
-      });
-      if (g.missing.length) html += '<div class="arow" style="border-left:3px solid #ef4444">' +
-        '<span class="muted">未打卡：</span>' + g.missing.map(esc).join('、') + '</div>';
-    });
+    html += '<div class="stats">' + stat(s.active, '外業人員', '') + stat(s.inCount, '今日上班', '') +
+      stat(s.outCount, '今日下班', '') + stat(s.pending, '待核准', 'bad') + '</div>';
 
     if (d.pending.length) {
       html += '<h2>待核准（' + d.pending.length + '）</h2>';
       d.pending.forEach(function (p) {
-        var label = (p.method === '補打' ? '補打' : '外勤') + '・' + (p.punchType || '');
+        var label = (p.method === '補打' ? '補打' : (p.method === '外勤自主' ? '外勤' : '定點')) + '・' + (p.punchType || '');
         var actions = p.canApprove
           ? '<div class="pbtns"><button class="approve" data-id="' + esc(p.recordId) + '" data-d="approve">核准</button>' +
             '<button class="reject" data-id="' + esc(p.recordId) + '" data-d="reject">退回</button></div>'
-          : '<div class="muted" style="margin-top:6px">（待其直屬主管核准）</div>';
+          : '<div class="muted" style="margin-top:6px">（待其直屬主管／人資核准）</div>';
         html += '<div class="arow pend"><div class="row"><b>' + esc(p.name) + '</b><span class="muted">' + esc(label) + '　' + esc(p.time) + '</span></div>' +
-          '<div class="muted">事由：' + esc(p.reason) + '</div>' + actions + '</div>';
+          '<div class="muted">' + esc(p.info || '') + '</div>' + actions + '</div>';
       });
     }
+
+    html += '<h2>各工地出缺勤</h2>';
+    html += '<select id="siteFilter"><option value="__all__">全部工地</option>';
+    d.sites.forEach(function (g) { html += '<option value="' + esc(g.site) + '">' + esc(g.site) + '</option>'; });
+    html += '</select>';
+
+    d.sites.forEach(function (g) {
+      html += '<div class="sitegrp" data-site="' + esc(g.site) + '"><h3>📍 ' + esc(g.site) + '</h3>' +
+        '<table class="att"><tr><th>姓名</th><th>上班</th><th>下班</th></tr>';
+      g.people.forEach(function (pp) {
+        var miss = pp.in ? '' : ' class="miss"';
+        html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td>' + esc(pp.in || '—') + '</td><td>' + esc(pp.out || '—') + '</td></tr>';
+      });
+      html += '</table></div>';
+    });
 
     html += '<button class="refresh" id="refreshBtn">↻ 重新整理</button>';
     w.innerHTML = html;
@@ -360,6 +370,13 @@
     Array.prototype.forEach.call(document.querySelectorAll('.pbtns button'), function (b) {
       b.onclick = function () { decide(b.getAttribute('data-id'), b.getAttribute('data-d')); };
     });
+    var sf = document.getElementById('siteFilter');
+    if (sf) sf.onchange = function () {
+      var v = sf.value;
+      Array.prototype.forEach.call(document.querySelectorAll('.sitegrp'), function (el) {
+        el.style.display = (v === '__all__' || el.getAttribute('data-site') === v) ? '' : 'none';
+      });
+    };
   }
   function stat(n, label, cls) { return '<div class="stat ' + cls + '"><b>' + n + '</b><span>' + label + '</span></div>'; }
   function decide(recordId, decision) {
