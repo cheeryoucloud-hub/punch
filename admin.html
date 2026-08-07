@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打卡管理後台</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+         background: #f4f6f8; color: #1f2937; padding: 16px; }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .date { color: #6b7280; font-size: 13px; margin-bottom: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+  .stat { background: #fff; border-radius: 10px; padding: 10px 6px; text-align: center;
+          box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .stat b { display: block; font-size: 22px; font-weight: bold; }
+  .stat span { font-size: 11px; color: #6b7280; }
+  .stat.warn b { color: #d97706; } .stat.bad b { color: #b91c1c; }
+  h2 { font-size: 15px; margin: 18px 0 8px; }
+  .card { background: #fff; border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.06); font-size: 14px; }
+  .row { display: flex; justify-content: space-between; align-items: center; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .tag.ok { background: #e8f5f0; color: #0f6e56; }
+  .tag.bad { background: #fdecea; color: #b91c1c; }
+  .tag.wait { background: #fff4e0; color: #b45309; }
+  .pend { border-left: 3px solid #f59e0b; }
+  .pbtns { display: flex; gap: 8px; margin-top: 10px; }
+  .pbtns button { flex: 1; border: none; border-radius: 8px; padding: 10px 0; font-size: 14px;
+                  font-weight: bold; color: #fff; font-family: inherit; }
+  .approve { background: #1d9e75; } .reject { background: #d97706; }
+  .refresh { width: 100%; border: 1px solid #d1d5db; background: #fff; border-radius: 10px;
+             padding: 12px; font-size: 14px; font-family: inherit; margin-top: 8px; }
+  .empty { color: #9ca3af; font-size: 13px; padding: 8px 0; }
+  .gate { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .uid { font-family: monospace; font-size: 12px; background: #f3f4f6; padding: 8px; border-radius: 6px;
+         word-break: break-all; margin: 8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <div class="date" id="loading">載入中…</div>
+</div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+  var LIFF_ID = "2011018188-xd2VsV0A";
+  var GAS_URL = "https://script.google.com/macros/s/AKfycbydMPZ2v8XYeV_5-L8GKV5CjS21j9Z_9g3_8CBZHWgb0Bx09bBrRUG7Y9vN_1K2oWk/exec";
+  var uid = '';
+
+  liff.init({ liffId: LIFF_ID }).then(function () {
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    return liff.getProfile();
+  }).then(function (p) {
+    if (!p) return;
+    uid = p.userId;
+    loadDashboard();
+  }).catch(function (e) {
+    document.getElementById('loading').textContent = '初始化失敗：' + e;
+  });
+
+  function post(body) {
+    return fetch(GAS_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+
+  function loadDashboard() {
+    document.getElementById('loading').textContent = '載入中…';
+    post({ action: 'dashboard', uid: uid }).then(render).catch(function (e) {
+      document.getElementById('loading').textContent = '讀取失敗：' + e;
+    });
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }); }
+
+  function render(d) {
+    var w = document.getElementById('wrap');
+    if (!d || !d.ok) { w.innerHTML = '<div class="gate">讀取失敗</div>'; return; }
+
+    if (!d.isAdmin) {
+      w.innerHTML = '<div class="gate"><h1>無檢視權限</h1>' +
+        '<p class="muted">此後台僅限管理員檢視。</p>' +
+        '<p class="muted">你的 LINE userId（若你是主管，請填入「員工名冊」的 LINE_userId 欄，並把「角色」設為「管理員」）：</p>' +
+        '<div class="uid">' + esc(d.uid) + '</div></div>';
+      return;
+    }
+
+    var s = d.stats;
+    var html = '<h1>打卡管理後台</h1><div class="date">' + esc(d.date) + '　管理員：' + esc(d.name) + '</div>';
+    html += '<div class="stats">' +
+      stat(s.active, '在職', '') + stat(s.punchedIn, '已上班', '') +
+      stat(s.active - s.punchedIn, '未打卡', 'warn') + stat(s.pending, '待核准', 'bad') + '</div>';
+
+    html += '<h2>待核准外勤（' + d.pending.length + '）</h2>';
+    if (!d.pending.length) html += '<div class="empty">目前沒有待核准項目</div>';
+    d.pending.forEach(function (p) {
+      html += '<div class="card pend"><div class="row"><b>' + esc(p.name) + '</b>' +
+        '<span class="muted">' + esc(p.time) + '</span></div>' +
+        '<div class="muted">事由：' + esc(p.reason) + '</div>' +
+        '<div class="pbtns">' +
+        '<button class="approve" onclick="decide(\'' + esc(p.recordId) + '\',\'approve\')">核准</button>' +
+        '<button class="reject" onclick="decide(\'' + esc(p.recordId) + '\',\'reject\')">退回</button>' +
+        '</div></div>';
+    });
+
+    html += '<h2>今日打卡（' + d.today.length + '）</h2>';
+    if (!d.today.length) html += '<div class="empty">今天還沒有人打卡</div>';
+    d.today.forEach(function (r) {
+      var cls = r.status === '正常' ? 'ok' : (r.status === '待核准' ? 'wait' : 'bad');
+      html += '<div class="card"><div class="row"><span><b>' + esc(r.name) + '</b> ' +
+        '<span class="muted">' + esc(r.type) + ' ' + esc(r.time) + '</span></span>' +
+        '<span class="tag ' + cls + '">' + esc(r.status) + '</span></div>' +
+        '<div class="muted">' + esc(r.site) + (r.distance !== '' ? '　' + esc(r.distance) + 'm' : '') + '</div></div>';
+    });
+
+    html += '<h2>未打卡名單（' + d.missing.length + '）</h2>';
+    html += d.missing.length ? '<div class="card">' + d.missing.map(esc).join('、') + '</div>'
+                             : '<div class="empty">全員已打上班卡 ✅</div>';
+
+    html += '<button class="refresh" onclick="loadDashboard()">↻ 重新整理</button>';
+    w.innerHTML = html;
+  }
+
+  function stat(n, label, cls) {
+    return '<div class="stat ' + cls + '"><b>' + n + '</b><span>' + label + '</span></div>';
+  }
+
+  function decide(recordId, decision) {
+    post({ action: 'approve', uid: uid, recordId: recordId, decision: decision }).then(function (res) {
+      if (!res.ok) { alert('操作失敗：' + (res.msg || '')); return; }
+      loadDashboard();
+    });
+  }
+</script>
+</body>
+</html>
