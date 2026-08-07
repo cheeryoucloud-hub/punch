@@ -113,12 +113,45 @@
     if (!p) return;
     me.userId = p.userId; me.displayName = p.displayName;
     me.idToken = liff.getIDToken();
-    if (P.view === 'admin') startAdmin(); else startPunch();
+    if (P.view === 'admin') { startAdmin(); return; }
+    post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
+      if (w && w.ok && !w.bound) startBind(w); else startPunch();
+    }).catch(function () { startPunch(); });
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
   });
 
   var sitesData = [], sitesDone = false, gpsDone = false, userPicked = false, punchCtx = {};
+
+  function startBind(w) {
+    var opts = '';
+    (w.unbound || []).forEach(function (e) { opts += '<option value="' + esc(e.id) + '">' + esc(e.name + (e.dept ? '（' + e.dept + '）' : '')) + '</option>'; });
+    var html = '<div class="card"><h1>首次設定</h1>' +
+      '<div class="sub">歡迎 ' + esc(w.lineName) + '！請選擇你的姓名完成綁定，之後打卡就會自動認得你。</div>';
+    if (!opts) {
+      document.getElementById('wrap').innerHTML = html +
+        '<div class="gps err">名冊中查無可綁定的員工，請聯絡管理員把你加入「員工名冊」後再試。</div></div>';
+      return;
+    }
+    html += '<label>你的姓名</label><select id="bindSel">' + opts + '</select>' +
+      '<div class="btns"><button class="in" id="bindBtn">確認綁定</button></div>' +
+      '<div class="result" id="bindMsg"></div></div>';
+    document.getElementById('wrap').innerHTML = html;
+    document.getElementById('bindBtn').onclick = function () {
+      var empId = document.getElementById('bindSel').value;
+      document.getElementById('bindBtn').disabled = true;
+      post({ action: 'bind', idToken: me.idToken, empId: empId }).then(function (res) {
+        var m = document.getElementById('bindMsg');
+        if (!res || !res.ok) { document.getElementById('bindBtn').disabled = false; m.className = 'result show bad'; m.textContent = (res && res.msg) || '綁定失敗'; return; }
+        m.className = 'result show good'; m.textContent = '綁定成功：' + res.name + '，即將進入打卡…';
+        me.displayName = res.name;
+        setTimeout(startPunch, 1200);
+      }).catch(function (e) {
+        document.getElementById('bindBtn').disabled = false;
+        var m = document.getElementById('bindMsg'); m.className = 'result show bad'; m.textContent = '綁定失敗：' + e;
+      });
+    };
+  }
 
   function startPunch() {
     var tpl = document.getElementById('punchTpl').content.cloneNode(true);
@@ -228,8 +261,9 @@
     var body = [
       { type: 'text', text: title, weight: 'bold', size: 'lg', color: color },
       { type: 'separator', margin: 'md' },
-      line('姓名', me.displayName), line('類型', punchCtx.type),
-      line('地點', res.siteName), line('時間', res.time)];
+      line('姓名', me.displayName), line('類型', punchCtx.type)];
+    if (res.empSiteName) body.push(line('工地別', res.empSiteName));
+    body.push(line('打卡地點', res.siteName), line('時間', res.time));
     if (res.distance !== '' && res.distance != null) body.push(line('距離', res.distance + ' 公尺'));
     if (punchCtx.note) body.push(line('備註', punchCtx.note));
     return { type: 'flex', altText: title + ' ' + me.displayName,
