@@ -16,8 +16,9 @@
           font-size: 16px; font-weight: bold; margin-bottom: 14px; }
   .site.field { background: #fff4e0; color: #b45309; }
   label { font-size: 13px; color: #374151; display: block; margin: 12px 0 6px; }
-  textarea { width: 100%; border: 1px solid #d1d5db; border-radius: 10px; padding: 12px;
-             font-size: 15px; font-family: inherit; }
+  textarea, select, input { width: 100%; border: 1px solid #d1d5db; border-radius: 10px; padding: 12px;
+             font-size: 15px; font-family: inherit; background: #fff; }
+  select { height: 48px; }
   .gps { font-size: 13px; padding: 10px 12px; border-radius: 10px; background: #f3f4f6;
          color: #4b5563; margin: 14px 0; }
   .gps.ok { background: #e8f5f0; color: #0f6e56; }
@@ -63,19 +64,21 @@
 <template id="punchTpl">
   <div class="card">
     <h1>公司打卡</h1>
-    <div class="sub" id="sub">請確認地點後打卡</div>
-    <div class="site" id="siteBox">—</div>
-    <div id="reasonWrap" style="display:none">
-      <label>外勤事由（必填）</label>
-      <textarea id="reason" rows="2" placeholder="例：送件市政府 / 拜訪業主"></textarea>
+    <div class="sub" id="who"></div>
+    <label>打卡位置</label>
+    <select id="siteSel"><option>載入中…</option></select>
+    <div id="otherWrap" style="display:none">
+      <label>地點／事由（必填）</label>
+      <input id="otherReason" placeholder="例：送件市政府 / 拜訪業主">
     </div>
     <div class="gps" id="gps">定位中…</div>
+    <label>備註（選填）</label>
+    <input id="note" placeholder="例：交通延誤，遲到 10 分">
     <div class="btns">
       <button class="in" id="btnIn" disabled>上班</button>
       <button class="out" id="btnOut" disabled>下班</button>
     </div>
     <div class="result" id="result"></div>
-    <div class="who" id="who"></div>
   </div>
 </template>
 
@@ -109,60 +112,136 @@
   }).then(function (p) {
     if (!p) return;
     me.userId = p.userId; me.displayName = p.displayName;
+    me.idToken = liff.getIDToken();
     if (P.view === 'admin') startAdmin(); else startPunch();
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
   });
 
+  var sitesData = [], sitesDone = false, gpsDone = false, userPicked = false, punchCtx = {};
+
   function startPunch() {
     var tpl = document.getElementById('punchTpl').content.cloneNode(true);
     var w = document.getElementById('wrap'); w.innerHTML = ''; w.appendChild(tpl);
-    var isField = (P.mode === 'field');
-    var siteBox = document.getElementById('siteBox');
-    if (isField) {
-      siteBox.className = 'site field'; siteBox.textContent = '🚗 外勤打卡';
-      document.getElementById('reasonWrap').style.display = 'block';
-    } else {
-      siteBox.textContent = '📍 ' + (P.name || P.site || '未指定工地');
-    }
     document.getElementById('who').textContent = '打卡人：' + me.displayName;
-    document.getElementById('btnIn').onclick = function () { punch('上班', isField); };
-    document.getElementById('btnOut').onclick = function () { punch('下班', isField); };
+    document.getElementById('siteSel').addEventListener('change', function () { userPicked = true; updateOther(); });
+    document.getElementById('btnIn').onclick = function () { punch('上班'); };
+    document.getElementById('btnOut').onclick = function () { punch('下班'); };
     locate();
+    loadSites();
   }
 
-  function setGps(txt, cls) { var el = document.getElementById('gps'); el.textContent = txt; el.className = 'gps' + (cls ? ' ' + cls : ''); }
+  function loadSites() {
+    post({ action: 'sites' }).then(function (res) { sitesData = (res && res.sites) || []; sitesDone = true; buildOptions(); })
+      .catch(function () { sitesDone = true; buildOptions(); });
+  }
+
+  function jsDist(la1, ln1, la2, ln2) {
+    var R = 6371000, tr = Math.PI / 180;
+    var dLa = (la2 - la1) * tr, dLn = (ln2 - ln1) * tr;
+    var a = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(la1 * tr) * Math.cos(la2 * tr) * Math.sin(dLn / 2) * Math.sin(dLn / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function buildOptions() {
+    var sel = document.getElementById('siteSel');
+    if (!sel || !sitesDone) return;
+    var nearestIdx = -1, best = Infinity;
+    if (pos.lat != null) sitesData.forEach(function (s, i) {
+      s._d = jsDist(pos.lat, pos.lng, s.lat, s.lng); if (s._d < best) { best = s._d; nearestIdx = i; }
+    });
+    var prev = userPicked ? sel.value : null;
+    var html = '';
+    sitesData.forEach(function (s, i) {
+      var suffix = (i === nearestIdx) ? '（最近 ' + Math.round(s._d) + 'm）' : (s._d != null ? '（' + Math.round(s._d) + 'm）' : '');
+      html += '<option value="' + esc(s.code) + '">' + esc(s.name + suffix) + '</option>';
+    });
+    html += '<option value="__other__">其他（外勤，自行輸入）</option>';
+    sel.innerHTML = html;
+    if (prev) sel.value = prev;
+    else if (P.site) sel.value = P.site;
+    else if (nearestIdx >= 0) sel.selectedIndex = nearestIdx;
+    updateOther();
+    if (gpsDone) ready();
+  }
+
+  function updateOther() {
+    document.getElementById('otherWrap').style.display =
+      (document.getElementById('siteSel').value === '__other__') ? 'block' : 'none';
+  }
+  function findSiteByCode(c) { for (var i = 0; i < sitesData.length; i++) if (sitesData[i].code === c) return sitesData[i]; return null; }
+
+  function setGps(txt, cls) { var el = document.getElementById('gps'); if (el) { el.textContent = txt; el.className = 'gps' + (cls ? ' ' + cls : ''); } }
   function ready() { document.getElementById('btnIn').disabled = false; document.getElementById('btnOut').disabled = false; }
   function locate() {
-    if (!navigator.geolocation) { setGps('此裝置不支援定位，仍可打卡', 'err'); ready(); return; }
+    if (!navigator.geolocation) { setGps('此裝置不支援定位，仍可打卡', 'err'); gpsDone = true; buildOptions(); return; }
     navigator.geolocation.getCurrentPosition(function (r) {
-      pos.lat = r.coords.latitude; pos.lng = r.coords.longitude; setGps('✓ 已取得定位', 'ok'); ready();
-    }, function (err) { setGps('未取得定位（' + err.message + '）', 'err'); ready(); },
+      pos.lat = r.coords.latitude; pos.lng = r.coords.longitude; setGps('✓ 已取得定位', 'ok'); gpsDone = true; buildOptions();
+    }, function (err) { setGps('未取得定位（' + err.message + '）', 'err'); gpsDone = true; buildOptions(); },
     { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
   }
-  function punch(type, isField) {
-    var reason = isField ? document.getElementById('reason').value.trim() : '';
-    if (isField && !reason) { alert('外勤打卡請填寫事由'); return; }
+
+  function punch(type) {
+    var sel = document.getElementById('siteSel');
+    var isOther = (sel.value === '__other__');
+    var reason = isOther ? document.getElementById('otherReason').value.trim() : '';
+    if (isOther && !reason) { alert('請輸入地點／事由'); return; }
+    var note = document.getElementById('note').value.trim();
+    var site = '', siteName = '';
+    if (!isOther) { var s = findSiteByCode(sel.value); site = s ? s.code : sel.value; siteName = s ? s.name : ''; }
+    punchCtx = { type: type, note: note };
     document.getElementById('btnIn').disabled = true; document.getElementById('btnOut').disabled = true;
-    post({ userId: me.userId, displayName: me.displayName, mode: P.mode, site: P.site, siteName: P.name,
-           punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, device: navigator.platform + ' / LINE' })
+    post({ idToken: me.idToken, userId: me.userId, displayName: me.displayName, mode: isOther ? 'field' : '', site: site, siteName: siteName,
+           punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, note: note, device: navigator.platform + ' / LINE' })
       .then(onDone).catch(function (e) { showResult(false, '送出失敗：' + e); ready(); });
   }
+
   function onDone(res) {
     if (!res || !res.ok) { showResult(false, (res && res.msg) || '打卡失敗'); ready(); return; }
+    var okStatus = (res.status === '正常' || res.status === '待核准');
     var t = '打卡成功　' + res.time;
     if (res.status === '待核准') t = '外勤已送出，待主管核准';
     else if (res.status !== '正常') t = '已記錄，定位異常（' + res.status + '）';
     else if (res.distance !== '') t += '（距工地 ' + res.distance + ' 公尺）';
-    showResult(res.status === '正常' || res.status === '待核准', t);
-    setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 2500);
+    showResult(okStatus, t);
+    sendCard(res).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1500); });
   }
+
+  function sendCard(res) {
+    try {
+      if (!liff.isInClient()) return Promise.resolve();
+      var ctx = liff.getContext();
+      if (!ctx || ctx.type === 'external' || ctx.type === 'none') return Promise.resolve();
+      return liff.sendMessages([buildFlex(res)]).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
+  }
+
+  function buildFlex(res) {
+    var good = (res.status === '正常'), wait = (res.status === '待核准');
+    var color = good ? '#1d9e75' : (wait ? '#d97706' : '#b91c1c');
+    var title = good ? '✅ 打卡成功' : (wait ? '⏳ 外勤待核准' : '⚠️ 打卡（定位異常）');
+    function line(k, v) {
+      return { type: 'box', layout: 'baseline', spacing: 'sm', contents: [
+        { type: 'text', text: k, size: 'sm', color: '#999999', flex: 2 },
+        { type: 'text', text: String(v == null || v === '' ? '-' : v), size: 'sm', color: '#333333', flex: 5, wrap: true }] };
+    }
+    var body = [
+      { type: 'text', text: title, weight: 'bold', size: 'lg', color: color },
+      { type: 'separator', margin: 'md' },
+      line('姓名', me.displayName), line('類型', punchCtx.type),
+      line('地點', res.siteName), line('時間', res.time)];
+    if (res.distance !== '' && res.distance != null) body.push(line('距離', res.distance + ' 公尺'));
+    if (punchCtx.note) body.push(line('備註', punchCtx.note));
+    return { type: 'flex', altText: title + ' ' + me.displayName,
+      contents: { type: 'bubble', size: 'kilo', body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: body } } };
+  }
+
   function showResult(good, txt) { var el = document.getElementById('result'); el.textContent = txt; el.className = 'result show ' + (good ? 'good' : 'bad'); }
 
   function startAdmin() { loadDashboard(); }
   function loadDashboard() {
     document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入後台…</div></div>';
-    post({ action: 'dashboard', uid: me.userId }).then(renderAdmin)
+    post({ action: 'dashboard', idToken: me.idToken }).then(renderAdmin)
       .catch(function (e) { document.getElementById('wrap').innerHTML = '<div class="card">讀取失敗：' + esc(e) + '</div>'; });
   }
   function renderAdmin(d) {
@@ -170,42 +249,43 @@
     if (!d || !d.ok) { w.innerHTML = '<div class="card">讀取失敗</div>'; return; }
     if (!d.isAdmin) {
       w.innerHTML = '<div class="card"><h1>無檢視權限</h1>' +
-        '<p class="muted">此後台僅限管理員。若你是主管，請把下面的 userId 填入「員工名冊」的 LINE_userId 欄，並把該員工設為經理／角色管理員：</p>' +
+        '<p class="muted">此頁僅限管理員。若你是主管，請把下面的 userId 填入「員工名冊」的 LINE_userId 欄，並把該員工設為經理／角色管理員：</p>' +
         '<div class="uid">' + esc(d.uid) + '</div></div>';
       return;
     }
     var s = d.stats;
-    var html = '<h1>打卡管理後台</h1><div class="date">' + esc(d.date) + '　管理員：' + esc(d.name) + '</div>';
-    html += '<div class="stats">' + stat(s.active, '在職', '') + stat(s.punchedIn, '已上班', '') +
-      stat(s.active - s.punchedIn, '未打卡', 'warn') + stat(s.pending, '待核准', 'bad') + '</div>';
-    html += '<h2>待核准外勤（' + d.pending.length + '）</h2>';
-    if (!d.pending.length) html += '<div class="empty">目前沒有待核准項目</div>';
-    d.pending.forEach(function (p) {
-      html += '<div class="arow pend"><div class="row"><b>' + esc(p.name) + '</b><span class="muted">' + esc(p.time) + '</span></div>' +
-        '<div class="muted">事由：' + esc(p.reason) + '</div><div class="pbtns">' +
-        '<button class="approve" data-id="' + esc(p.recordId) + '" data-d="approve">核准</button>' +
-        '<button class="reject" data-id="' + esc(p.recordId) + '" data-d="reject">退回</button></div></div>';
+    var html = '<h1>打卡狀況</h1><div class="date">' + esc(d.date) + '　' + esc(d.name) + '</div>';
+    html += '<div class="stats">' + stat(s.active, '需打卡', '') + stat(s.punchedIn, '已上班', '') +
+      stat(s.missing, '未打卡', 'warn') + stat(s.pending, '待核准', 'bad') + '</div>';
+
+    d.sites.forEach(function (g) {
+      html += '<h2>📍 ' + esc(g.site) + '（' + g.rows.length + '）</h2>';
+      if (!g.rows.length) html += '<div class="empty">尚無打卡</div>';
+      g.rows.forEach(function (r) {
+        var cls = r.status === '正常' ? 'ok' : (r.status === '待核准' ? 'wait' : 'bad');
+        html += '<div class="arow"><div class="row"><span><b>' + esc(r.name) + '</b> <span class="muted">' + esc(r.type) + ' ' + esc(r.time) + '</span></span>' +
+          '<span class="tag ' + cls + '">' + esc(r.status) + '</span></div>' +
+          (r.distance !== '' ? '<div class="muted">' + esc(r.distance) + 'm</div>' : '') + '</div>';
+      });
+      if (g.missing.length) html += '<div class="arow" style="border-left:3px solid #ef4444">' +
+        '<span class="muted">未打卡：</span>' + g.missing.map(esc).join('、') + '</div>';
     });
-    html += '<h2>今日打卡（' + d.today.length + '）</h2>';
-    if (!d.today.length) html += '<div class="empty">今天還沒有人打卡</div>';
-    d.today.forEach(function (r) {
-      var cls = r.status === '正常' ? 'ok' : (r.status === '待核准' ? 'wait' : 'bad');
-      html += '<div class="arow"><div class="row"><span><b>' + esc(r.name) + '</b> <span class="muted">' + esc(r.type) + ' ' + esc(r.time) + '</span></span>' +
-        '<span class="tag ' + cls + '">' + esc(r.status) + '</span></div>' +
-        '<div class="muted">' + esc(r.site) + (r.distance !== '' ? '　' + esc(r.distance) + 'm' : '') + '</div></div>';
-    });
-    html += '<h2>未打卡名單（' + d.missing.length + '）</h2>';
-    html += d.missing.length ? '<div class="arow">' + d.missing.map(esc).join('、') + '</div>' : '<div class="empty">全員已打上班卡 ✅</div>';
+
+    if (d.pending.length) {
+      html += '<h2>待核准外勤（' + d.pending.length + '）</h2>';
+      d.pending.forEach(function (p) {
+        html += '<div class="arow pend"><b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.time) + '　' + esc(p.reason) + '</span></div>';
+      });
+      html += '<div class="muted" style="margin-top:6px">※ 核准請至電腦版管理後台操作</div>';
+    }
+
     html += '<button class="refresh" id="refreshBtn">↻ 重新整理</button>';
     w.innerHTML = html;
     document.getElementById('refreshBtn').onclick = loadDashboard;
-    Array.prototype.forEach.call(document.querySelectorAll('.pbtns button'), function (b) {
-      b.onclick = function () { decide(b.getAttribute('data-id'), b.getAttribute('data-d')); };
-    });
   }
   function stat(n, label, cls) { return '<div class="stat ' + cls + '"><b>' + n + '</b><span>' + label + '</span></div>'; }
   function decide(recordId, decision) {
-    post({ action: 'approve', uid: me.userId, recordId: recordId, decision: decision }).then(function (res) {
+    post({ action: 'approve', idToken: me.idToken, recordId: recordId, decision: decision }).then(function (res) {
       if (!res.ok) { alert('操作失敗：' + (res.msg || '')); return; }
       loadDashboard();
     });
