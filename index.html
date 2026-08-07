@@ -69,6 +69,19 @@
   table.att td.nm { text-align: left; }
   table.att tr.miss td { color: #b91c1c; }
   #siteFilter { margin-bottom: 10px; }
+  .lvhint { font-size: 12px; color: #6b7280; margin: 8px 0 10px; }
+  table.lv { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.lv th, table.lv td { border: 1px solid #e5e7eb; padding: 7px 4px; text-align: center; }
+  table.lv th { background: #f1f5f9; }
+  table.lv tr.weekend td { background: #fafafa; }
+  .lvdate { font-weight: bold; color: #0f6e56; cursor: pointer; }
+  .lvcell { cursor: pointer; min-width: 54px; }
+  .lvcell:empty::after { content: '—'; color: #cbd5e1; }
+  .lvcell.lvset { background: #e8f5f0; color: #0f6e56; font-weight: bold; }
+  .lvmask { position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 49; }
+  .lvpicker { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 12px rgba(0,0,0,.15); padding: 16px; z-index: 50; max-width: 480px; margin: 0 auto; }
+  .lvpicker h3 { margin: 0 0 12px; font-size: 15px; }
+  .lvopt { display: block; width: 100%; text-align: left; border: 1px solid #e5e7eb; background: #fff; border-radius: 10px; padding: 13px; font-size: 15px; margin-bottom: 8px; font-family: inherit; }
 </style>
 </head>
 <body>
@@ -130,8 +143,11 @@
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
       else if (P.view === 'makeup') startMakeup();
+      else if (P.view === 'leave') startLeave();
       else startPunch();
-    }).catch(function () { if (P.view === 'makeup') startMakeup(); else startPunch(); });
+    }).catch(function () {
+      if (P.view === 'makeup') startMakeup(); else if (P.view === 'leave') startLeave(); else startPunch();
+    });
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
   });
@@ -166,6 +182,84 @@
         var m = document.getElementById('bindMsg'); m.className = 'result show bad'; m.textContent = '綁定失敗：' + e;
       });
     };
+  }
+
+  var leaveState = { year: 0, month: 0, map: {} };
+
+  function startLeave() {
+    var d = new Date();
+    leaveState.year = d.getFullYear(); leaveState.month = d.getMonth() + 1;
+    document.getElementById('wrap').innerHTML = '<div class="card"><h1>休假填寫</h1>' +
+      '<div class="sub">' + esc(me.displayName) + '（只能填自己）</div>' +
+      '<label>月份</label><input type="month" id="lvYm">' +
+      '<div class="lvhint">點「日期」設整天；點上午/下午格設半天</div>' +
+      '<div id="lvTableWrap"></div></div>';
+    document.getElementById('lvYm').value = leaveState.year + '-' + ('0' + leaveState.month).slice(-2);
+    document.getElementById('lvYm').onchange = function () {
+      var v = this.value.split('-'); leaveState.year = Number(v[0]); leaveState.month = Number(v[1]); loadLeave();
+    };
+    loadLeave();
+  }
+
+  function loadLeave() {
+    document.getElementById('lvTableWrap').innerHTML = '<div class="muted">載入中…</div>';
+    post({ action: 'getLeave', idToken: me.idToken, year: leaveState.year, month: leaveState.month })
+      .then(function (res) {
+        if (!res || !res.ok) { document.getElementById('lvTableWrap').innerHTML = '<div class="muted">' + esc((res && res.msg) || '讀取失敗') + '</div>'; return; }
+        leaveState.map = res.leaves || {};
+        renderLeave();
+      }).catch(function (e) { document.getElementById('lvTableWrap').innerHTML = '<div class="muted">讀取失敗：' + esc(e) + '</div>'; });
+  }
+
+  function renderLeave() {
+    var y = leaveState.year, m = leaveState.month;
+    var dim = new Date(y, m, 0).getDate();
+    var wk = ['日', '一', '二', '三', '四', '五', '六'];
+    var html = '<table class="lv"><tr><th>日期</th><th>星期</th><th>上午</th><th>下午</th></tr>';
+    for (var d = 1; d <= dim; d++) {
+      var dow = new Date(y, m - 1, d).getDay();
+      var we = (dow === 0 || dow === 6) ? ' class="weekend"' : '';
+      var lv = leaveState.map[d] || { am: '', pm: '' };
+      html += '<tr' + we + '><td class="lvdate" data-day="' + d + '" data-slot="全天">' + m + '/' + d + '</td>' +
+        '<td>' + wk[dow] + '</td>' +
+        '<td class="lvcell' + (lv.am ? ' lvset' : '') + '" data-day="' + d + '" data-slot="上午">' + esc(lv.am) + '</td>' +
+        '<td class="lvcell' + (lv.pm ? ' lvset' : '') + '" data-day="' + d + '" data-slot="下午">' + esc(lv.pm) + '</td></tr>';
+    }
+    html += '</table>';
+    document.getElementById('lvTableWrap').innerHTML = html;
+    Array.prototype.forEach.call(document.querySelectorAll('.lvdate, .lvcell'), function (el) {
+      el.onclick = function () { openLeavePicker(Number(el.getAttribute('data-day')), el.getAttribute('data-slot')); };
+    });
+  }
+
+  function openLeavePicker(day, slot) {
+    var opts = ['例假', '特休', '病假', '事假', '其他', '清除'];
+    var slotLabel = slot === '全天' ? '整天' : slot;
+    var html = '<div class="lvmask" id="lvMask"></div><div class="lvpicker"><h3>' + leaveState.month + '/' + day + '　' + slotLabel + '　假別</h3>';
+    opts.forEach(function (o) { html += '<button class="lvopt" data-t="' + o + '">' + o + '</button>'; });
+    html += '<button class="lvopt" data-t="__cancel__" style="text-align:center;color:#6b7280">取消</button></div>';
+    var div = document.createElement('div'); div.id = 'lvPickerWrap'; div.innerHTML = html; document.body.appendChild(div);
+    function close() { var el = document.getElementById('lvPickerWrap'); if (el) el.parentNode.removeChild(el); }
+    document.getElementById('lvMask').onclick = close;
+    Array.prototype.forEach.call(div.querySelectorAll('.lvopt'), function (b) {
+      b.onclick = function () {
+        var t = b.getAttribute('data-t');
+        if (t === '__cancel__') { close(); return; }
+        setLeaveCell(day, slot, t, close);
+      };
+    });
+  }
+
+  function setLeaveCell(day, slot, leaveType, done) {
+    var date = leaveState.year + '/' + ('0' + leaveState.month).slice(-2) + '/' + ('0' + day).slice(-2);
+    post({ action: 'setLeave', idToken: me.idToken, date: date, slot: slot, leaveType: leaveType })
+      .then(function (res) {
+        if (res && res.ok) {
+          leaveState.map[day] = { am: res.am, pm: res.pm, note: (leaveState.map[day] && leaveState.map[day].note) || '' };
+          renderLeave();
+        } else alert((res && res.msg) || '儲存失敗');
+        if (done) done();
+      }).catch(function (e) { alert('儲存失敗：' + e); if (done) done(); });
   }
 
   function startPunch() {
