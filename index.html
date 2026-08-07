@@ -84,13 +84,6 @@
       <button class="out" id="btnOut" disabled>下班</button>
     </div>
     <div class="result" id="result"></div>
-    <div class="makeup">
-      <div class="mk-title">忘了打卡？補打（限當天，需主管核准）</div>
-      <select id="mkType"><option value="上班">上班補打</option><option value="下班">下班補打</option></select>
-      <input type="time" id="mkTime">
-      <input id="mkReason" placeholder="補打原因（必填）">
-      <button class="mkbtn" id="mkBtn">送出補打申請</button>
-    </div>
   </div>
 </template>
 
@@ -127,8 +120,10 @@
     me.idToken = liff.getIDToken();
     if (P.view === 'admin') { startAdmin(); return; }
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
-      if (w && w.ok && !w.bound) startBind(w); else startPunch();
-    }).catch(function () { startPunch(); });
+      if (w && w.ok && !w.bound) startBind(w);
+      else if (P.view === 'makeup') startMakeup();
+      else startPunch();
+    }).catch(function () { if (P.view === 'makeup') startMakeup(); else startPunch(); });
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
   });
@@ -172,11 +167,21 @@
     document.getElementById('siteSel').addEventListener('change', function () { userPicked = true; updateOther(); });
     document.getElementById('btnIn').onclick = function () { punch('上班'); };
     document.getElementById('btnOut').onclick = function () { punch('下班'); };
-    var nowD = new Date();
-    document.getElementById('mkTime').value = ('0' + nowD.getHours()).slice(-2) + ':' + ('0' + nowD.getMinutes()).slice(-2);
-    document.getElementById('mkBtn').onclick = makeup;
     locate();
     loadSites();
+  }
+
+  function startMakeup() {
+    var nowD = new Date();
+    var t = ('0' + nowD.getHours()).slice(-2) + ':' + ('0' + nowD.getMinutes()).slice(-2);
+    document.getElementById('wrap').innerHTML = '<div class="card"><h1>補打卡</h1>' +
+      '<div class="sub">打卡人：' + esc(me.displayName) + '（限當天，需直屬主管核准）</div>' +
+      '<label>類型</label><select id="mkType"><option value="上班">上班補打</option><option value="下班">下班補打</option></select>' +
+      '<label>時間</label><input type="time" id="mkTime" value="' + t + '">' +
+      '<label>補打原因（必填）</label><input id="mkReason" placeholder="例：忘記打上班卡">' +
+      '<div class="btns"><button class="in" id="mkBtn">送出補打申請</button></div>' +
+      '<div class="result" id="result"></div></div>';
+    document.getElementById('mkBtn').onclick = makeup;
   }
 
   function makeup() {
@@ -340,10 +345,12 @@
       html += '<h2>待核准（' + d.pending.length + '）</h2>';
       d.pending.forEach(function (p) {
         var label = (p.method === '補打' ? '補打' : '外勤') + '・' + (p.punchType || '');
+        var actions = p.canApprove
+          ? '<div class="pbtns"><button class="approve" data-id="' + esc(p.recordId) + '" data-d="approve">核准</button>' +
+            '<button class="reject" data-id="' + esc(p.recordId) + '" data-d="reject">退回</button></div>'
+          : '<div class="muted" style="margin-top:6px">（待其直屬主管核准）</div>';
         html += '<div class="arow pend"><div class="row"><b>' + esc(p.name) + '</b><span class="muted">' + esc(label) + '　' + esc(p.time) + '</span></div>' +
-          '<div class="muted">事由：' + esc(p.reason) + '</div>' +
-          '<div class="pbtns"><button class="approve" data-id="' + esc(p.recordId) + '" data-d="approve">核准</button>' +
-          '<button class="reject" data-id="' + esc(p.recordId) + '" data-d="reject">退回</button></div></div>';
+          '<div class="muted">事由：' + esc(p.reason) + '</div>' + actions + '</div>';
       });
     }
 
