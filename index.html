@@ -34,6 +34,11 @@
   .result.good { background: #e8f5f0; color: #0f6e56; }
   .result.bad { background: #fdecea; color: #b91c1c; }
   .who { font-size: 12px; color: #9ca3af; text-align: center; margin-top: 14px; }
+  .makeup { margin-top: 20px; padding-top: 16px; border-top: 1px dashed #d1d5db; }
+  .mk-title { font-size: 14px; color: #6b7280; margin-bottom: 10px; }
+  .makeup select, .makeup input { margin-bottom: 10px; }
+  .mkbtn { width: 100%; background: #6b7280; color: #fff; border: none; border-radius: 10px; padding: 14px 0; font-size: 15px; font-weight: bold; font-family: inherit; }
+  .mkbtn:disabled { opacity: .5; }
 
   .date { color: #6b7280; font-size: 13px; margin-bottom: 14px; }
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
@@ -79,6 +84,13 @@
       <button class="out" id="btnOut" disabled>下班</button>
     </div>
     <div class="result" id="result"></div>
+    <div class="makeup">
+      <div class="mk-title">忘了打卡？補打（限當天，需主管核准）</div>
+      <select id="mkType"><option value="上班">上班補打</option><option value="下班">下班補打</option></select>
+      <input type="time" id="mkTime">
+      <input id="mkReason" placeholder="補打原因（必填）">
+      <button class="mkbtn" id="mkBtn">送出補打申請</button>
+    </div>
   </div>
 </template>
 
@@ -160,8 +172,27 @@
     document.getElementById('siteSel').addEventListener('change', function () { userPicked = true; updateOther(); });
     document.getElementById('btnIn').onclick = function () { punch('上班'); };
     document.getElementById('btnOut').onclick = function () { punch('下班'); };
+    var nowD = new Date();
+    document.getElementById('mkTime').value = ('0' + nowD.getHours()).slice(-2) + ':' + ('0' + nowD.getMinutes()).slice(-2);
+    document.getElementById('mkBtn').onclick = makeup;
     locate();
     loadSites();
+  }
+
+  function makeup() {
+    var type = document.getElementById('mkType').value;
+    var time = document.getElementById('mkTime').value;
+    var reason = document.getElementById('mkReason').value.trim();
+    if (!time) { alert('請選補打時間'); return; }
+    if (!reason) { alert('請填補打原因'); return; }
+    document.getElementById('mkBtn').disabled = true;
+    post({ action: 'makeup', idToken: me.idToken, punchType: type, makeupTime: time, reason: reason, device: navigator.platform + ' / LINE' })
+      .then(function (res) {
+        document.getElementById('mkBtn').disabled = false;
+        if (!res || !res.ok) { showResult(false, (res && res.msg) || '補打失敗'); return; }
+        showResult(true, '補打申請已送出（' + type + '補打 ' + res.time + '），待主管核准');
+        setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 2200);
+      }).catch(function (e) { document.getElementById('mkBtn').disabled = false; showResult(false, '送出失敗：' + e); });
   }
 
   function loadSites() {
@@ -306,16 +337,22 @@
     });
 
     if (d.pending.length) {
-      html += '<h2>待核准外勤（' + d.pending.length + '）</h2>';
+      html += '<h2>待核准（' + d.pending.length + '）</h2>';
       d.pending.forEach(function (p) {
-        html += '<div class="arow pend"><b>' + esc(p.name) + '</b> <span class="muted">' + esc(p.time) + '　' + esc(p.reason) + '</span></div>';
+        var label = (p.method === '補打' ? '補打' : '外勤') + '・' + (p.punchType || '');
+        html += '<div class="arow pend"><div class="row"><b>' + esc(p.name) + '</b><span class="muted">' + esc(label) + '　' + esc(p.time) + '</span></div>' +
+          '<div class="muted">事由：' + esc(p.reason) + '</div>' +
+          '<div class="pbtns"><button class="approve" data-id="' + esc(p.recordId) + '" data-d="approve">核准</button>' +
+          '<button class="reject" data-id="' + esc(p.recordId) + '" data-d="reject">退回</button></div></div>';
       });
-      html += '<div class="muted" style="margin-top:6px">※ 核准請至電腦版管理後台操作</div>';
     }
 
     html += '<button class="refresh" id="refreshBtn">↻ 重新整理</button>';
     w.innerHTML = html;
     document.getElementById('refreshBtn').onclick = loadDashboard;
+    Array.prototype.forEach.call(document.querySelectorAll('.pbtns button'), function (b) {
+      b.onclick = function () { decide(b.getAttribute('data-id'), b.getAttribute('data-d')); };
+    });
   }
   function stat(n, label, cls) { return '<div class="stat ' + cls + '"><b>' + n + '</b><span>' + label + '</span></div>'; }
   function decide(recordId, decision) {
