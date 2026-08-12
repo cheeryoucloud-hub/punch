@@ -82,6 +82,7 @@
   .lvpicker { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 12px rgba(0,0,0,.15); padding: 16px; z-index: 50; max-width: 480px; margin: 0 auto; }
   .lvpicker h3 { margin: 0 0 12px; font-size: 15px; }
   .lvopt { display: block; width: 100%; text-align: left; border: 1px solid #e5e7eb; background: #fff; border-radius: 10px; padding: 13px; font-size: 15px; margin-bottom: 8px; font-family: inherit; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 10px 20px; border-radius: 22px; font-size: 14px; z-index: 70; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
 </style>
 </head>
 <body>
@@ -245,21 +246,30 @@
       b.onclick = function () {
         var t = b.getAttribute('data-t');
         if (t === '__cancel__') { close(); return; }
-        setLeaveCell(day, slot, t, close);
+        close();
+        setLeaveCell(day, slot, t);
       };
     });
   }
 
-  function setLeaveCell(day, slot, leaveType, done) {
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.style.display = 'block';
+  }
+  function hideToast() { var t = document.getElementById('toast'); if (t) t.style.display = 'none'; }
+
+  function setLeaveCell(day, slot, leaveType) {
+    toast('存檔中…');
     var date = leaveState.year + '/' + ('0' + leaveState.month).slice(-2) + '/' + ('0' + day).slice(-2);
     post({ action: 'setLeave', idToken: me.idToken, date: date, slot: slot, leaveType: leaveType })
       .then(function (res) {
         if (res && res.ok) {
           leaveState.map[day] = { am: res.am, pm: res.pm, note: (leaveState.map[day] && leaveState.map[day].note) || '' };
           renderLeave();
-        } else alert((res && res.msg) || '儲存失敗');
-        if (done) done();
-      }).catch(function (e) { alert('儲存失敗：' + e); if (done) done(); });
+          toast('✓ 已儲存'); setTimeout(hideToast, 900);
+        } else { hideToast(); alert((res && res.msg) || '儲存失敗'); }
+      }).catch(function (e) { hideToast(); alert('儲存失敗：' + e); });
   }
 
   function startPunch() {
@@ -298,7 +308,7 @@
         document.getElementById('mkBtn').disabled = false;
         if (!res || !res.ok) { showResult(false, (res && res.msg) || '補打失敗'); return; }
         showResult(true, '補打申請已送出（' + type + '補打 ' + res.time + '），待主管核准');
-        setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 2200);
+        sendFlexMsg(buildMakeupFlex(type, res.time, reason)).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1600); });
       }).catch(function (e) { document.getElementById('mkBtn').disabled = false; showResult(false, '送出失敗：' + e); });
   }
 
@@ -408,6 +418,28 @@
       contents: { type: 'bubble', size: 'kilo', body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: body } } };
   }
 
+  function sendFlexMsg(flex) {
+    try {
+      if (!liff.isInClient()) return Promise.resolve();
+      var ctx = liff.getContext();
+      if (!ctx || ctx.type === 'external' || ctx.type === 'none') return Promise.resolve();
+      return liff.sendMessages([flex]).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
+  }
+  function buildMakeupFlex(type, time, reason) {
+    function line(k, v) {
+      return { type: 'box', layout: 'baseline', spacing: 'sm', contents: [
+        { type: 'text', text: k, size: 'sm', color: '#999999', flex: 2 },
+        { type: 'text', text: String(v == null || v === '' ? '-' : v), size: 'sm', color: '#333333', flex: 5, wrap: true }] };
+    }
+    var body = [
+      { type: 'text', text: '📝 已申請補打卡', weight: 'bold', size: 'lg', color: '#d97706' },
+      { type: 'separator', margin: 'md' },
+      line('姓名', me.displayName), line('類型', type + '補打'), line('補打時間', time), line('原因', reason),
+      { type: 'text', text: '待主管審核後可成功登錄。', size: 'sm', color: '#d97706', margin: 'md', wrap: true }];
+    return { type: 'flex', altText: '已申請補打卡 ' + me.displayName,
+      contents: { type: 'bubble', size: 'kilo', body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: body } } };
+  }
   function showResult(good, txt) { var el = document.getElementById('result'); el.textContent = txt; el.className = 'result show ' + (good ? 'good' : 'bad'); }
 
   function startAdmin() { loadDashboard(); }
