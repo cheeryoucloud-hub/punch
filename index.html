@@ -128,9 +128,19 @@
     return { site: o.site || '', name: o.name || '', mode: o.mode || '', view: o.view || '' };
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }); }
-  function post(body) {
+  function post(body, _try) {
+    _try = _try || 1;
     return fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json(); });
+      .then(function (r) { return r.text(); })
+      .then(function (txt) {
+        var o = null; try { o = JSON.parse(txt); } catch (e) { o = null; }   // 伺服器偶爾回非 JSON(冷啟動/暫時錯誤)
+        if (o) return o;
+        throw new Error('bad-json');
+      })
+      .catch(function (e) {
+        if (_try < 3) return new Promise(function (res) { setTimeout(res, 600 * _try); }).then(function () { return post(body, _try + 1); });
+        throw new Error('伺服器忙碌或連線不穩，請再按一次');   // 自動重試 3 次仍失敗才報錯
+      });
   }
 
   liff.init({ liffId: LIFF_ID }).then(function () {
@@ -141,14 +151,13 @@
     me.userId = p.userId; me.displayName = p.displayName;
     me.idToken = liff.getIDToken();
     if (P.view === 'admin') { startAdmin(); return; }
+    // 先立刻渲染畫面(GPS/工地同時在背景載入)，whoami 平行跑；若未綁定再切到綁定畫面
+    if (P.view === 'makeup') startMakeup();
+    else if (P.view === 'leave') startLeave();
+    else startPunch();
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
-      else if (P.view === 'makeup') startMakeup();
-      else if (P.view === 'leave') startLeave();
-      else startPunch();
-    }).catch(function () {
-      if (P.view === 'makeup') startMakeup(); else if (P.view === 'leave') startLeave(); else startPunch();
-    });
+    }).catch(function () {});
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
   });
@@ -484,6 +493,10 @@
       html += '<div class="sitegrp" data-site="' + esc(g.site) + '"><h3>📍 ' + esc(g.site) + '</h3>' +
         '<table class="att"><tr><th>姓名</th><th>上班</th><th>下班</th></tr>';
       g.people.forEach(function (pp) {
+        if (pp.leave) {   // 依輪休表：今日休假者顯示假別，不算未打卡
+          html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">🌴 ' + esc(pp.leave) + '</td></tr>';
+          return;
+        }
         var miss = pp.in ? '' : ' class="miss"';
         html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td>' + esc(pp.in || '—') + '</td><td>' + esc(pp.out || '—') + '</td></tr>';
       });
