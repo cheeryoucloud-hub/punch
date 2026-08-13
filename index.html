@@ -494,7 +494,7 @@
         '<table class="att"><tr><th>姓名</th><th>上班</th><th>下班</th></tr>';
       g.people.forEach(function (pp) {
         if (pp.leave) {   // 依輪休表：今日休假者顯示假別，不算未打卡
-          html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">🌴 ' + esc(pp.leave) + '</td></tr>';
+          html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">' + esc(pp.leave) + '</td></tr>';
           return;
         }
         var miss = pp.in ? '' : ' class="miss"';
