@@ -295,9 +295,11 @@
   function startMakeup() {
     var nowD = new Date();
     var t = ('0' + nowD.getHours()).slice(-2) + ':' + ('0' + nowD.getMinutes()).slice(-2);
+    var today = nowD.getFullYear() + '-' + ('0' + (nowD.getMonth() + 1)).slice(-2) + '-' + ('0' + nowD.getDate()).slice(-2);
     document.getElementById('wrap').innerHTML = '<div class="card"><h1>補打卡</h1>' +
-      '<div class="sub">打卡人：' + esc(me.displayName) + '（限當天，需直屬主管核准）</div>' +
+      '<div class="sub">打卡人：' + esc(me.displayName) + '（需直屬主管核准）</div>' +
       '<label>類型</label><select id="mkType"><option value="上班">上班補打</option><option value="下班">下班補打</option></select>' +
+      '<label>日期</label><input type="date" id="mkDate" value="' + today + '" max="' + today + '">' +
       '<label>時間</label><input type="time" id="mkTime" value="' + t + '">' +
       '<label>補打原因（必填）</label><input id="mkReason" placeholder="例：忘記打上班卡">' +
       '<div class="btns"><button class="in" id="mkBtn">送出補打申請</button></div>' +
@@ -307,17 +309,19 @@
 
   function makeup() {
     var type = document.getElementById('mkType').value;
+    var date = document.getElementById('mkDate').value;
     var time = document.getElementById('mkTime').value;
     var reason = document.getElementById('mkReason').value.trim();
+    if (!date) { alert('請選補打日期'); return; }
     if (!time) { alert('請選補打時間'); return; }
     if (!reason) { alert('請填補打原因'); return; }
     document.getElementById('mkBtn').disabled = true;
-    post({ action: 'makeup', idToken: me.idToken, punchType: type, makeupTime: time, reason: reason, device: navigator.platform + ' / LINE' })
+    post({ action: 'makeup', idToken: me.idToken, punchType: type, makeupDate: date, makeupTime: time, reason: reason, device: navigator.platform + ' / LINE' })
       .then(function (res) {
         document.getElementById('mkBtn').disabled = false;
         if (!res || !res.ok) { showResult(false, (res && res.msg) || '補打失敗'); return; }
-        showResult(true, '補打申請已送出（' + type + '補打 ' + res.time + '），待主管核准');
-        sendFlexMsg(buildMakeupFlex(type, res.time, reason)).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1600); });
+        showResult(true, '補打申請已送出（' + (res.date || date) + ' ' + type + '補打 ' + res.time + '），待主管核准');
+        sendFlexMsg(buildMakeupFlex(type, (res.date || date) + ' ' + res.time, reason)).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1600); });
       }).catch(function (e) { document.getElementById('mkBtn').disabled = false; showResult(false, '送出失敗：' + e); });
   }
 
