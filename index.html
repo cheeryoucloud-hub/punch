@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>公司打卡</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -113,6 +116,25 @@
 <script>
   var LIFF_ID = "2011018188-xd2VsV0A";
   var GAS_URL = "https://script.google.com/macros/s/AKfycbydMPZ2v8XYeV_5-L8GKV5CjS21j9Z_9g3_8CBZHWgb0Bx09bBrRUG7Y9vN_1K2oWk/exec";
+
+  // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
+  var APP_VERSION = "2026-08-20-01";
+  (function ensureFresh() {
+    try {
+      var cur = new URLSearchParams(location.search).get('_v');
+      fetch(location.pathname + '?probe=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+          var m = t.match(/APP_VERSION\s*=\s*"([^"]+)"/);   // 讀線上最新檔的版本號
+          if (!m) return;
+          var latest = m[1];
+          if (latest !== APP_VERSION && cur !== latest) {   // 目前跑的是舊版 → 導到帶新版號的網址，強制抓新檔（不會迴圈）
+            var sep = location.href.indexOf('?') >= 0 ? '&' : '?';
+            location.replace(location.href + sep + '_v=' + encodeURIComponent(latest));
+          }
+        }).catch(function () {});
+    } catch (e) {}
+  })();
 
   var P = getParams();
   var me = { userId: '', displayName: '' };
