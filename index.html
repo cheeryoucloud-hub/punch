@@ -118,7 +118,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbydMPZ2v8XYeV_5-L8GKV5CjS21j9Z_9g3_8CBZHWgb0Bx09bBrRUG7Y9vN_1K2oWk/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-20-01";
+  var APP_VERSION = "2026-08-20-02";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -172,9 +172,9 @@
     if (!p) return;
     me.userId = p.userId; me.displayName = p.displayName;
     me.idToken = liff.getIDToken();
-    if (P.view === 'admin') { startAdmin(); return; }
     // 先立刻渲染畫面(GPS/工地同時在背景載入)，whoami 平行跑；若未綁定再切到綁定畫面
-    if (P.view === 'makeup') startMakeup();
+    if (P.view === 'overview' || P.view === 'admin') startOverview();
+    else if (P.view === 'makeup') startMakeup();
     else if (P.view === 'leave') startLeave();
     else if (P.view === 'transfer') startTransfer();
     else startPunch();
@@ -669,6 +669,113 @@
       if (!res.ok) { alert('操作失敗：' + (res.msg || '')); return; }
       loadDashboard();
     });
+  }
+
+  /* ======== 出勤概覽（依角色顯示出勤 + 調休/補打卡/外勤申請） ======== */
+  function startOverview() {
+    document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入出勤概覽…</div></div>';
+    post({ action: 'overview', idToken: me.idToken }).then(renderOverview)
+      .catch(function (e) { document.getElementById('wrap').innerHTML = '<div class="card">讀取失敗：' + esc(e) + '</div>'; });
+  }
+
+  function ovMd(s) { var p = String(s).split('/'); return p.length >= 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; }
+  function ovSlot(am, pm) { return [am ? '上午' + am : '', pm ? '下午' + pm : ''].filter(Boolean).join('・') || '-'; }
+  function ovTag(status) {
+    var cls = (status === '已核准') ? 'ok' : ((status === '已退回' || status === '已取消') ? 'bad' : 'wait');
+    return '<span class="tag ' + cls + '">' + esc(status) + '</span>';
+  }
+  function ovMy(m) {
+    if (!m) return '<div class="muted">—</div>';
+    if (m.leave) return '<div class="row"><span class="muted">今日</span><span class="tag ok">' + esc(m.leave) + '</span></div>';
+    var warn = m.in ? '' : ' style="color:#b91c1c"';
+    return '<div class="row"><span class="muted">上班</span><b' + warn + '>' + esc(m.in || '尚未打卡') + '</b></div>' +
+           '<div class="row"><span class="muted">下班</span><b>' + esc(m.out || '—') + '</b></div>';
+  }
+  function ovActions(kind, id, canAct) {
+    if (!canAct) return '';
+    return '<div class="pbtns"><button class="approve" data-k="' + kind + '" data-id="' + esc(id) + '" data-d="approve">核准</button>' +
+           '<button class="reject" data-k="' + kind + '" data-id="' + esc(id) + '" data-d="reject">退回</button></div>';
+  }
+  function ovTfCard(x) {
+    var line = ovMd(x.orig) + '（' + ovSlot(x.origAM, x.origPM) + '）→ ' + ovMd(x.neu) + '（' + ovSlot(x.newAM, x.newPM) + '）';
+    return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
+      '<div class="muted">' + esc(line) + '</div>' +
+      (x.reason ? '<div class="muted">理由：' + esc(x.reason) + '</div>' : '') +
+      ovActions('transfer', x.id, x.canAct) + '</div>';
+  }
+  function ovPnCard(x, kind) {
+    var typeTxt = (kind === 'field') ? '（外勤）' : '（補打）';
+    return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
+      '<div class="muted">' + esc(x.date + ' ' + x.time + '　' + x.punchType) + typeTxt + '</div>' +
+      (x.reason ? '<div class="muted">事由：' + esc(x.reason) + '</div>' : '') +
+      ovActions('punch', x.recordId, x.canAct) + '</div>';
+  }
+  function ovSection(title, kind, list) {
+    list = list || [];
+    var actCount = list.filter(function (x) { return x.canAct; }).length;
+    var h = '<h2>' + esc(title) + (actCount ? ' <span class="tag wait">待簽核 ' + actCount + '</span>' : '') + '</h2>';
+    if (!list.length) return h + '<div class="empty">目前沒有資料</div>';
+    list.forEach(function (x) { h += (kind === 'transfer') ? ovTfCard(x) : ovPnCard(x, kind); });
+    return h;
+  }
+
+  function renderOverview(d) {
+    var w = document.getElementById('wrap');
+    if (!d || !d.ok) { w.innerHTML = '<div class="card">讀取失敗</div>'; return; }
+    if (!d.bound) { w.innerHTML = '<div class="card"><h1>尚未綁定</h1><p class="muted">請先從打卡頁完成綁定後再使用。</p></div>'; return; }
+
+    var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.date) + '　' + esc(d.name) + '（' + esc(d.role) + '）</div>';
+    html += '<div class="card" style="margin-bottom:14px"><div class="mk-title">我的今日出勤</div>' + ovMy(d.me) + '</div>';
+
+    if (d.sites && d.sites.length) {
+      html += '<h2>負責工地出勤</h2><select id="ovSiteFilter"><option value="__all__">全部工地</option>';
+      d.sites.forEach(function (g) { html += '<option value="' + esc(g.site) + '">' + esc(g.site) + '</option>'; });
+      html += '</select>';
+      d.sites.forEach(function (g) {
+        html += '<div class="sitegrp" data-site="' + esc(g.site) + '"><h3>📍 ' + esc(g.site) + '</h3>' +
+          '<table class="att"><tr><th>姓名</th><th>上班</th><th>下班</th></tr>';
+        g.people.forEach(function (pp) {
+          if (pp.leave) { html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">' + esc(pp.leave) + '</td></tr>'; return; }
+          var miss = pp.in ? '' : ' class="miss"';
+          html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td>' + esc(pp.in || '—') + '</td><td>' + esc(pp.out || '—') + '</td></tr>';
+        });
+        html += '</table></div>';
+      });
+    }
+
+    html += ovSection('調休申請', 'transfer', d.apps.transfer);
+    html += ovSection('補打卡申請', 'makeup', d.apps.makeup);
+    html += ovSection('外勤申請', 'field', d.apps.field);
+    html += '<button class="refresh" id="ovRefresh">↻ 重新整理</button>';
+    w.innerHTML = html;
+
+    document.getElementById('ovRefresh').onclick = startOverview;
+    var sf = document.getElementById('ovSiteFilter');
+    if (sf) sf.onchange = function () {
+      var v = sf.value;
+      Array.prototype.forEach.call(document.querySelectorAll('.sitegrp'), function (el) {
+        el.style.display = (v === '__all__' || el.getAttribute('data-site') === v) ? '' : 'none';
+      });
+    };
+    Array.prototype.forEach.call(document.querySelectorAll('.pbtns button'), function (b) {
+      b.onclick = function () { ovAct(b.getAttribute('data-k'), b.getAttribute('data-id'), b.getAttribute('data-d'), b); };
+    });
+  }
+
+  function ovAct(kind, id, decision, btn) {
+    var box = btn.parentNode;
+    Array.prototype.forEach.call(box.querySelectorAll('button'), function (x) { x.disabled = true; });
+    var body = (kind === 'transfer')
+      ? { action: 'actTransfer', idToken: me.idToken, id: id, decision: decision }
+      : { action: 'approve', idToken: me.idToken, recordId: id, decision: decision };
+    post(body).then(function (res) {
+      if (!res || !res.ok) {
+        alert('操作失敗：' + ((res && res.msg) || ''));
+        Array.prototype.forEach.call(box.querySelectorAll('button'), function (x) { x.disabled = false; });
+        return;
+      }
+      startOverview();
+    }).catch(function (e) { alert('操作失敗：' + e); startOverview(); });
   }
 </script>
 </body>
