@@ -154,6 +154,7 @@
     // 先立刻渲染畫面(GPS/工地同時在背景載入)，whoami 平行跑；若未綁定再切到綁定畫面
     if (P.view === 'makeup') startMakeup();
     else if (P.view === 'leave') startLeave();
+    else if (P.view === 'transfer') startTransfer();
     else startPunch();
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
@@ -279,6 +280,125 @@
           toast('✓ 已儲存'); setTimeout(hideToast, 900);
         } else { hideToast(); alert((res && res.msg) || '儲存失敗'); }
       }).catch(function (e) { hideToast(); alert('儲存失敗：' + e); });
+  }
+
+  /* ======== 調休申請（一般職員，走後台同一套兩關簽核） ======== */
+  var tfState = { year: 0, month: 0, roster: {}, origAM: '', origPM: '' };
+  var TF_LV_OPTS = ['例假', '特休', '病假', '事假', '其他'];
+
+  function tfLvOptions() {
+    var h = '<option value="">不調</option>';
+    TF_LV_OPTS.forEach(function (o) { h += '<option value="' + o + '">' + o + '</option>'; });
+    return h;
+  }
+
+  function startTransfer() {
+    var d = new Date();
+    tfState.year = d.getFullYear(); tfState.month = d.getMonth() + 1;
+    document.getElementById('wrap').innerHTML = '<div class="card"><h1>調休申請</h1>' +
+      '<div class="sub">' + esc(me.displayName) + '（只能申請自己；原定休假日依輪休表自動帶入）</div>' +
+      '<label>原定休假月份</label><input type="month" id="tfYm">' +
+      '<label>原定休假日（僅顯示已排休的日期）</label><select id="tfOrigDay"><option value="">載入中…</option></select>' +
+      '<div class="gps ok" id="tfOrigInfo" style="display:none"></div>' +
+      '<label>欲調休日期</label><input type="date" id="tfNewDate">' +
+      '<label>欲調假別</label>' +
+      '<div style="display:flex;gap:10px">' +
+        '<div style="flex:1"><div class="muted" style="margin-bottom:4px">上午</div><select id="tfNewAM">' + tfLvOptions() + '</select></div>' +
+        '<div style="flex:1"><div class="muted" style="margin-bottom:4px">下午</div><select id="tfNewPM">' + tfLvOptions() + '</select></div>' +
+      '</div>' +
+      '<label>調休理由（選填）</label><input id="tfReason" placeholder="例：家中臨時有事">' +
+      '<div class="btns"><button class="in" id="tfBtn" disabled>送出調休申請</button></div>' +
+      '<div class="result" id="result"></div></div>';
+    document.getElementById('tfYm').value = tfState.year + '-' + ('0' + tfState.month).slice(-2);
+    document.getElementById('tfYm').onchange = function () {
+      var v = this.value.split('-'); tfState.year = Number(v[0]); tfState.month = Number(v[1]); loadMyRoster();
+    };
+    document.getElementById('tfOrigDay').onchange = onOrigDayChange;
+    document.getElementById('tfBtn').onclick = submitTransfer;
+    loadMyRoster();
+  }
+
+  function loadMyRoster() {
+    var sel = document.getElementById('tfOrigDay');
+    sel.innerHTML = '<option value="">載入中…</option>';
+    document.getElementById('tfOrigInfo').style.display = 'none';
+    document.getElementById('tfBtn').disabled = true;
+    post({ action: 'myRoster', idToken: me.idToken, year: tfState.year, month: tfState.month })
+      .then(function (res) {
+        if (!res || !res.ok) { sel.innerHTML = '<option value="">' + esc((res && res.msg) || '讀取失敗') + '</option>'; return; }
+        tfState.roster = res.leaves || {};
+        var wk = ['日', '一', '二', '三', '四', '五', '六'];
+        var days = Object.keys(tfState.roster).map(Number).sort(function (a, b) { return a - b; });
+        if (!days.length) { sel.innerHTML = '<option value="">本月無排休可調</option>'; return; }
+        var h = '<option value="">請選擇…</option>';
+        days.forEach(function (dy) {
+          var lv = tfState.roster[dy] || {};
+          var dow = wk[new Date(tfState.year, tfState.month - 1, dy).getDay()];
+          var parts = [];
+          if (lv.am) parts.push('上午' + lv.am);
+          if (lv.pm) parts.push('下午' + lv.pm);
+          h += '<option value="' + dy + '">' + tfState.month + '/' + dy + '（' + dow + '）　' + parts.join('・') + '</option>';
+        });
+        sel.innerHTML = h;
+      })
+      .catch(function () { sel.innerHTML = '<option value="">讀取失敗</option>'; });
+  }
+
+  function onOrigDayChange() {
+    var day = Number(document.getElementById('tfOrigDay').value);
+    var info = document.getElementById('tfOrigInfo');
+    var btn = document.getElementById('tfBtn');
+    if (!day || !tfState.roster[day]) {
+      tfState.origAM = ''; tfState.origPM = ''; info.style.display = 'none'; btn.disabled = true; return;
+    }
+    var lv = tfState.roster[day];
+    tfState.origAM = lv.am || ''; tfState.origPM = lv.pm || '';
+    info.style.display = 'block';
+    info.textContent = '原定假別：上午 ' + (tfState.origAM || '—') + '　下午 ' + (tfState.origPM || '—');
+    document.getElementById('tfNewAM').value = tfState.origAM || '';   // 欲調預設同原定
+    document.getElementById('tfNewPM').value = tfState.origPM || '';
+    btn.disabled = false;
+  }
+
+  function submitTransfer() {
+    var day = Number(document.getElementById('tfOrigDay').value);
+    if (!day) { alert('請選原定休假日'); return; }
+    var newDate = document.getElementById('tfNewDate').value;
+    if (!newDate) { alert('請選欲調休日期'); return; }
+    var newAM = document.getElementById('tfNewAM').value;
+    var newPM = document.getElementById('tfNewPM').value;
+    if (!newAM && !newPM) { alert('請至少設定欲調休日的上午或下午假別'); return; }
+    var reason = document.getElementById('tfReason').value.trim();
+    var origDate = tfState.year + '/' + ('0' + tfState.month).slice(-2) + '/' + ('0' + day).slice(-2);
+    var btn = document.getElementById('tfBtn'); btn.disabled = true;
+    post({ action: 'submitTransfer', idToken: me.idToken, origDate: origDate, newDate: newDate, newAM: newAM, newPM: newPM, reason: reason })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res || !res.ok) { showResult(false, (res && res.msg) || '送出失敗'); return; }
+        showResult(true, '調休申請已送出，待主管簽核');
+        sendFlexMsg(buildTransferFlex(res, reason)).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1600); });
+      })
+      .catch(function (e) { btn.disabled = false; showResult(false, '送出失敗：' + e); });
+  }
+
+  function buildTransferFlex(res, reason) {
+    function line(k, v) {
+      return { type: 'box', layout: 'baseline', spacing: 'sm', contents: [
+        { type: 'text', text: k, size: 'sm', color: '#999999', flex: 2 },
+        { type: 'text', text: String(v == null || v === '' ? '-' : v), size: 'sm', color: '#333333', flex: 5, wrap: true }] };
+    }
+    function md(s) { var p = String(s).split('/'); return p.length >= 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; }
+    function slotTxt(am, pm) { return [am ? '上午' + am : '', pm ? '下午' + pm : ''].filter(Boolean).join('・') || '-'; }
+    var body = [
+      { type: 'text', text: '🔁 已申請調休', weight: 'bold', size: 'lg', color: '#2563eb' },
+      { type: 'separator', margin: 'md' },
+      line('姓名', me.displayName),
+      line('原定休假', md(res.origDate) + '（' + slotTxt(res.origAM, res.origPM) + '）'),
+      line('欲調至', md(res.newDate) + '（' + slotTxt(res.newAM, res.newPM) + '）')];
+    if (reason) body.push(line('理由', reason));
+    body.push({ type: 'text', text: '待主管簽核後才會生效。', size: 'sm', color: '#2563eb', margin: 'md', wrap: true });
+    return { type: 'flex', altText: '已申請調休 ' + me.displayName,
+      contents: { type: 'bubble', size: 'kilo', body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: body } } };
   }
 
   function startPunch() {
