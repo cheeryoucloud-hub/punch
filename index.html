@@ -43,6 +43,9 @@
   .gps.ok{ background:var(--teal-soft); color:var(--teal-d); }
   .gps.err{ background:#fdecea; color:#b91c1c; }
   .gps .dot{ width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 4px rgba(14,124,102,.18); }
+  .gpsrow{ display:flex; align-items:center; gap:8px; }
+  .gpsrow .gps{ flex:1; margin-top:10px; }
+  .reloc{ margin-top:10px; flex:0 0 auto; border:1px solid var(--line); background:#fff; color:var(--teal-d); border-radius:11px; padding:10px 12px; font-size:12.5px; font-weight:700; font-family:inherit; white-space:nowrap; }
 
   .punchbtns{ display:flex; gap:12px; margin-top:16px; }
   .pbtn{ flex:1; border:none; border-radius:16px; padding:16px 0; font-size:17px; font-weight:800; font-family:inherit;
@@ -143,7 +146,7 @@
       <label class="lbl">地點／事由（必填）</label>
       <input id="otherReason" class="fld" placeholder="例：送件市政府 / 拜訪業主">
     </div>
-    <div class="gps" id="gps">定位中…</div>
+    <div class="gpsrow"><div class="gps" id="gps">定位中…</div><button type="button" class="reloc" id="relocBtn">↻ 重新定位</button></div>
     <label class="lbl">備註（選填）</label>
     <input id="note" class="fld" placeholder="例：交通延誤，遲到 10 分">
     <div class="punchbtns">
@@ -160,7 +163,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbydMPZ2v8XYeV_5-L8GKV5CjS21j9Z_9g3_8CBZHWgb0Bx09bBrRUG7Y9vN_1K2oWk/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-21-03";
+  var APP_VERSION = "2026-08-25-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -314,6 +317,7 @@
     document.getElementById('siteSel').addEventListener('change', function () { userPicked = true; updateOther(); });
     document.getElementById('btnIn').onclick = function () { punch('上班'); };
     document.getElementById('btnOut').onclick = function () { punch('下班'); };
+    document.getElementById('relocBtn').onclick = function () { locate(); };
     w.insertAdjacentHTML('beforeend', tabBar('punch'));
     locate();
     loadSites();
@@ -359,10 +363,14 @@
   function ready() { document.getElementById('btnIn').disabled = false; document.getElementById('btnOut').disabled = false; }
   function locate() {
     if (!navigator.geolocation) { setGps('此裝置不支援定位，仍可打卡', 'err'); gpsDone = true; buildOptions(); return; }
-    navigator.geolocation.getCurrentPosition(function (r) {
-      pos.lat = r.coords.latitude; pos.lng = r.coords.longitude; setGps('已定位', 'ok'); gpsDone = true; buildOptions();
-    }, function (err) { setGps('未取得定位（' + err.message + '）', 'err'); gpsDone = true; buildOptions(); },
-    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+    setGps('定位中…');
+    function ok(r) { pos.lat = r.coords.latitude; pos.lng = r.coords.longitude; setGps('已定位', 'ok'); gpsDone = true; buildOptions(); }
+    // 先高精度；失敗/逾時 → 改用一般精度重試（較快，靠 Wi-Fi/基地台），仍失敗才報錯
+    navigator.geolocation.getCurrentPosition(ok, function () {
+      navigator.geolocation.getCurrentPosition(ok, function (err) {
+        setGps('未取得定位，請按「重新定位」，或確認手機定位已開啟', 'err'); gpsDone = true; buildOptions();
+      }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
   }
   function punch(type) {
     var sel = document.getElementById('siteSel');
@@ -398,8 +406,9 @@
   }
   function buildFlex(res) {
     var good = (res.status === '正常'), wait = (res.status === '待核准');
+    var isField = res.siteName && String(res.siteName).indexOf('外勤') === 0;
     var color = good ? '#1d9e75' : (wait ? '#d97706' : '#b91c1c');
-    var title = good ? '✅ 打卡成功' : (wait ? '⏳ 外勤待核准' : '⚠️ 打卡（定位異常）');
+    var title = good ? '✅ 打卡成功' : (wait ? (isField ? '⏳ 外勤待核准' : '⏳ 待核准（定位待確認）') : '⚠️ 打卡（定位異常）');
     function line(k, v) {
       return { type: 'box', layout: 'baseline', spacing: 'sm', contents: [
         { type: 'text', text: k, size: 'sm', color: '#999999', flex: 2 },
