@@ -163,7 +163,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbydMPZ2v8XYeV_5-L8GKV5CjS21j9Z_9g3_8CBZHWgb0Bx09bBrRUG7Y9vN_1K2oWk/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-25-01";
+  var APP_VERSION = "2026-08-25-02";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -361,14 +361,21 @@
   function findSiteByCode(c) { for (var i = 0; i < sitesData.length; i++) if (sitesData[i].code === c) return sitesData[i]; return null; }
   function setGps(txt, cls) { var el = document.getElementById('gps'); if (el) { el.textContent = txt; el.className = 'gps' + (cls ? ' ' + cls : ''); } }
   function ready() { document.getElementById('btnIn').disabled = false; document.getElementById('btnOut').disabled = false; }
+  function geoErrMsg(err) {
+    var c = err && err.code;
+    if (c === 1) return '定位被拒（1）：請在 LINE 內允許此頁定位';        // PERMISSION_DENIED
+    if (c === 2) return '定位不到（2）：請到空曠處後按重新定位';          // POSITION_UNAVAILABLE
+    if (c === 3) return '定位逾時（3）：請按重新定位再試一次';            // TIMEOUT
+    return '未取得定位：請按重新定位';
+  }
   function locate() {
     if (!navigator.geolocation) { setGps('此裝置不支援定位，仍可打卡', 'err'); gpsDone = true; buildOptions(); return; }
     setGps('定位中…');
     function ok(r) { pos.lat = r.coords.latitude; pos.lng = r.coords.longitude; setGps('已定位', 'ok'); gpsDone = true; buildOptions(); }
-    // 先高精度；失敗/逾時 → 改用一般精度重試（較快，靠 Wi-Fi/基地台），仍失敗才報錯
+    // 先高精度；失敗/逾時 → 改用一般精度重試（較快，靠 Wi-Fi/基地台），仍失敗才報錯（顯示原因代碼）
     navigator.geolocation.getCurrentPosition(ok, function () {
       navigator.geolocation.getCurrentPosition(ok, function (err) {
-        setGps('未取得定位，請按「重新定位」，或確認手機定位已開啟', 'err'); gpsDone = true; buildOptions();
+        setGps(geoErrMsg(err), 'err'); gpsDone = true; buildOptions();
       }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
   }
