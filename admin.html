@@ -567,7 +567,7 @@ function actPunch(id,dec){ if(dec==='reject'&&!confirm('確定退回此申請?')
 var RMD=null;
 /** 依「發送對象」決定卡片標題/顏色/按鈕（與後端 _remindFlex 一致）*/
 function rmdStyle(target){
-  if(target==='role_admin'||target==='role_hr'||target==='role_admin_hr')
+  if(target==='role_admin'||target==='role_hr'||target==='role_admin_hr'||target==='custom_emp'||target==='custom_site')
     return { title:'📣 系統通知', color:'#2f6bd8', btn:'開啟系統' };
   var isOut=(target==='no_out');
   return { title:isOut?'⏰ 下班打卡提醒':'⏰ 上班打卡提醒', color:isOut?'#E29A2E':'#0E7C66',
@@ -608,22 +608,61 @@ function scRemind(){
   loadRemind();
 }
 function loadRemind(){
+  if(!state.rmdEmps) api('admin_empList',{}).then(function(e){ if(e.ok) state.rmdEmps=e.list; });
   api('admin_reminderList',{}).then(function(j){
     var b=$('rmdBody'); if(!b)return;
     if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
     RMD=j;
     if(!j.list.length){ b.innerHTML='<div class="empty">尚未設定提醒</div>'; return; }
-    var h='<table class="tbl"><thead><tr><th style="width:90px">每日時間</th><th>提醒事項</th><th style="width:170px">發送對象</th><th style="width:80px">啟用</th><th style="width:70px">卡片</th>'+(j.canEdit?'<th class="r" style="width:120px">操作</th>':'')+'</tr></thead><tbody>';
+    var h='<table class="tbl"><thead><tr><th style="width:118px">時間</th><th>提醒事項</th><th style="width:170px">發送對象</th><th style="width:80px">啟用</th><th style="width:70px">卡片</th>'+(j.canEdit?'<th class="r" style="width:120px">操作</th>':'')+'</tr></thead><tbody>';
     j.list.forEach(function(r,i){
-      h+='<tr><td><b style="font-size:15px">'+esc(r.time)+'</b></td>'+
+      h+='<tr><td><b style="font-size:15px">'+esc(r.time)+'</b><div class="hint">'+(r.date?('📅 '+esc(r.date.substring(5))):'每日')+'</div></td>'+
         '<td class="muted" style="line-height:1.6">'+esc(r.text)+'</td>'+
-        '<td>'+esc((j.targets||{})[r.target]||r.target)+'</td>'+
+        '<td>'+esc((j.targets||{})[r.target]||r.target)+((r.pick&&r.pick.length)?('<div class="hint">已選 '+r.pick.length+' 個</div>'):'')+'</td>'+
         '<td>'+(r.on?'<span class="pill ok">啟用</span>':'<span class="pill mut">停用</span>')+'</td>'+
         '<td><button class="btn sm" onclick="prevRemind('+i+')">👁 預覽</button></td>'+
         (j.canEdit?('<td class="r"><div class="actions"><button class="btn sm" onclick="editRemind('+i+')">編輯</button><button class="btn rj sm" onclick="delRemind('+i+')">刪</button></div></td>'):'')+'</tr>';
     });
     b.innerHTML=h+'</tbody></table>';
   });
+}
+function testRemind(){
+  busyOn('發送中…');
+  api('admin_testReminder',{target:$('rTarget').value,text:$('rText').value,pick:rmdPicked()}).then(function(j){
+    busyOff(); toast(j.ok?(j.msg||'已試發'):(j.msg||'試發失敗'), !j.ok);
+  });
+}
+/** 指定員工 / 指定工地 勾選區 */
+function rmdPickBox(target,pick){
+  var list=state.rmdEmps||[]; var picked={}; (pick||[]).forEach(function(x){ picked[String(x).trim()]=1; });
+  if(target==='custom_site'){
+    var st={}; list.forEach(function(e){ if(e.site)st[e.site]=1; });
+    var sites=Object.keys(st);
+    if(!sites.length) return '<div class="hint">尚無工地資料</div>';
+    return '<div class="ppick" id="rmdPick">'+sites.map(function(x){
+      return '<label class="pk"><input type="checkbox" value="'+esc(x)+'"'+(picked[x]?' checked':'')+' onchange="rmdPickCount()"><span>'+esc(x)+'</span></label>';
+    }).join('')+'</div>';
+  }
+  if(!list.length) return '<div class="hint">員工名單載入中…</div>';
+  return '<input id="rmdSearch" placeholder="搜尋姓名…" oninput="rmdPickFilter(this.value)" style="margin-bottom:8px;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px">'+
+    '<div class="ppick" id="rmdPick">'+list.map(function(e){
+      var id=String(e.empId);
+      return '<label class="pk" data-nm="'+esc(e.name)+'"><input type="checkbox" value="'+esc(id)+'"'+(picked[id]?' checked':'')+' onchange="rmdPickCount()"><span>'+esc(e.name)+'</span>'+(e.site?('<i>'+esc(e.site)+'</i>'):'')+'</label>';
+    }).join('')+'</div>';
+}
+function rmdPickFilter(q){ q=(q||'').trim();
+  Array.prototype.forEach.call(document.querySelectorAll('#rmdPick .pk'),function(el){
+    el.style.display=(!q||(el.getAttribute('data-nm')||'').indexOf(q)>=0)?'':'none'; }); }
+function rmdPickCount(){ var c=document.querySelectorAll('#rmdPick input:checked').length; var el=$('rmdPickN'); if(el)el.textContent=c; rmdLivePrev(); }
+function rmdPicked(){ return Array.prototype.map.call(document.querySelectorAll('#rmdPick input:checked'),function(i){return i.value;}); }
+function rmdSyncPick(){
+  var t=$('rTarget')?$('rTarget').value:'', box=$('rPickWrap'); if(!box)return;
+  if(t!=='custom_emp'&&t!=='custom_site'){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML='<label>'+(t==='custom_emp'?'指定員工（從員工名冊勾選）':'指定工地（該工地全員）')+
+    ' <span class="hint" style="font-weight:400">— 已選 <b id="rmdPickN">0</b></span></label>'+
+    rmdPickBox(t, (state.rmdCurPick||[]));
+  rmdPickCount();
 }
 function prevRemind(i){
   var r=RMD.list[i], tg=RMD.targets||{};
@@ -634,25 +673,34 @@ function rmdLivePrev(){
   var box=$('rPrev'); if(!box)return;
   var tg=(RMD&&RMD.targets)||{};
   var tgv=$('rTarget')?$('rTarget').value:'no_out';
-  box.innerHTML=rmdCardHtml(tgv, $('rText')?$('rText').value:'', $('rTime')?$('rTime').value:'', tg[tgv]||'');
+  var dv=$('rDate')&&$('rDate').value?($('rDate').value.replace(/-/g,'/')+' '):'每日 ';
+  box.innerHTML=rmdCardHtml(tgv, $('rText')?$('rText').value:'', dv+($('rTime')?$('rTime').value:''), tg[tgv]||'');
 }
 function editRemind(i){
-  var r=(i===null||i===undefined)?{time:'17:20',text:'',on:true,target:'no_out',row:0}:RMD.list[i];
+  var r=(i===null||i===undefined)?{time:'17:20',text:'',on:true,target:'no_out',row:0,pick:[]}:RMD.list[i];
+  state.rmdCurPick=r.pick||[];
   var tg=RMD.targets||{};
   var opts=Object.keys(tg).map(function(k){ return '<option value="'+k+'"'+(k===r.target?' selected':'')+'>'+esc(tg[k])+'</option>'; }).join('');
   modal((r.row?'編輯':'新增')+' LINE 提醒',
-    '<div class="row2"><div class="field"><label>每日時間</label><input id="rTime" type="time" value="'+esc(r.time||'17:20')+'"></div>'+
+    '<div class="row2"><div class="field"><label>時間</label><input id="rTime" type="time" value="'+esc(r.time||'17:20')+'"></div>'+
     '<div class="field"><label>啟用</label><select id="rOn"><option value="1"'+(r.on?' selected':'')+'>啟用</option><option value="0"'+(r.on?'':' selected')+'>停用</option></select></div></div>'+
+    '<div class="field"><label>指定日期（留空＝每天都發）</label><input id="rDate" type="date" value="'+esc(r.date?r.date.replace(/\//g,'-'):'')+'" onchange="rmdLivePrev()">'+
+      '<div class="hint" style="margin-top:4px">填了日期就只在那一天發送一次;留空則每天到點發送。</div></div>'+
     '<div class="field"><label>發送對象</label><select id="rTarget">'+opts+'</select></div>'+
+    '<div class="field" id="rPickWrap" style="display:none"></div>'+
     '<div class="field"><label>提醒事項（LINE 卡片內容）</label><textarea id="rText" rows="6" oninput="rmdLivePrev()" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13.5px;background:var(--surface-2);color:var(--ink)">'+esc(r.text||'')+'</textarea></div>'+
     '<div class="field"><label>卡片預覽（員工在 LINE 收到的樣子）</label><div id="rPrev"></div></div>',
     function(){
       busyOn('儲存中…');
-      api('admin_saveReminder',{row:r.row,time:$('rTime').value,text:$('rText').value,on:$('rOn').value==='1',target:$('rTarget').value})
+      api('admin_saveReminder',{row:r.row,time:$('rTime').value,date:$('rDate')?$('rDate').value.replace(/-/g,'/'):'',text:$('rText').value,on:$('rOn').value==='1',target:$('rTarget').value,pick:rmdPicked()})
         .then(function(j){ busyOff(); if(!j.ok){ toast(j.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存 '+(j.time||'')); loadRemind(); });
     });
-  if($('rTarget')) $('rTarget').onchange=rmdLivePrev;
+  if($('rTarget')) $('rTarget').onchange=function(){ state.rmdCurPick=rmdPicked(); rmdSyncPick(); rmdLivePrev(); };
+  rmdSyncPick();
   if($('rTime')) $('rTime').onchange=rmdLivePrev;
+  var acts=document.querySelector('.modal .acts');
+  if(acts){ var b=document.createElement('button'); b.className='btn sm'; b.textContent='📤 試發給我';
+    b.onclick=testRemind; acts.insertBefore(b,acts.firstChild); }
   rmdLivePrev();
 }
 function delRemind(i){
