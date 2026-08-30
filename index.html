@@ -193,7 +193,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-30-new-04";
+  var APP_VERSION = "2026-08-30-new-05";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -277,10 +277,10 @@
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
     }).catch(function () {});
-    post({ action: 'empListLine', idToken: me.idToken }).then(function (r) {   // 人資/管理員才會成功
-      if (r && r.ok) { IS_ADMIN = true; VIEW_EMPS = r.list;
-        var vb = document.getElementById('scViewAs'); if (vb) vb.innerHTML = viewAsBar(''); }
-    }).catch(function () {});
+    loadViewEmps(function () {                                  // 人資/管理員才會拿到名單
+      var vb = document.getElementById('scViewAs'); if (vb) vb.innerHTML = viewAsBar('');
+      if (IS_ADMIN && (P.view === 'overview' || P.view === 'admin')) startOverview();
+    });
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
   });
@@ -697,7 +697,10 @@
     if (!res || !res.ok) { body.innerHTML = '<div class="muted" style="text-align:center;padding:22px">' + esc((res && res.msg) || '讀取失敗') + '</div>'; return; }
     var who = document.getElementById('scWho'); if (who) who.textContent = res.name + ' · 當月排休與行事曆';
     var vbar = document.getElementById('scViewAs');
-    if (vbar) { if (IS_ADMIN && !VIEW_EMPS) loadViewEmps(function () { vbar.innerHTML = viewAsBar(res.name); }); else vbar.innerHTML = viewAsBar(res.name); }
+    if (vbar) {
+      vbar.innerHTML = viewAsBar(res.name);
+      if (VIEW_EMPS === null) loadViewEmps(function () { var v2 = document.getElementById('scViewAs'); if (v2) v2.innerHTML = viewAsBar(res.name); });
+    }
     var y = res.year, m = res.month, leaves = res.leaves || {}, special = res.special || {}, holi = res.holidays || {};
     var dim = new Date(y, m, 0).getDate(), first = new Date(y, m - 1, 1).getDay(), wk = ['日', '一', '二', '三', '四', '五', '六'];
     var h = '<div class="cal"><div class="wk">';
@@ -739,6 +742,7 @@
   var B_Q = '\'\'';   // 產生 onclick 內的 '' 
   function viewAsBar(curName) {
     if (!IS_ADMIN) return '';
+    if (VIEW_EMPS === null) return '<div class="vas"><b>👁 視角</b><span class="muted" style="font-size:12.5px">載入員工名單…</span></div>';
     var opts = '<option value="">（我自己）</option>';
     (VIEW_EMPS || []).forEach(function (e) { opts += '<option value="' + esc(e.empId) + '"' + (String(e.empId) === String(VIEW_AS) ? ' selected' : '') + '>' + esc(e.name + (e.site ? '（' + e.site + '）' : '')) + '</option>'; });
     return '<div class="vas"><b>👁 視角</b><select onchange="setViewAs(this.value)">' + opts + '</select>' +
@@ -747,8 +751,10 @@
   function loadViewEmps(cb) {
     if (VIEW_EMPS) { cb && cb(); return; }
     post({ action: 'empListLine', idToken: me.idToken }).then(function (r) {
-      if (r && r.ok) VIEW_EMPS = r.list; cb && cb();
-    }).catch(function () { cb && cb(); });
+      if (r && r.ok) { VIEW_EMPS = r.list || []; IS_ADMIN = true; }
+      else { VIEW_EMPS = []; }          // 失敗也要填空陣列,否則會一直重試/重繪
+      cb && cb();
+    }).catch(function () { VIEW_EMPS = []; cb && cb(); });
   }
   var ovDate = '', ovCur = '';   // ovDate=送給後端的查詢日('' 表今日)；ovCur=目前顯示日
   function ovShift(n) {
@@ -821,8 +827,8 @@
     if (!d.bound) { w.innerHTML = '<div class="card"><h1>尚未綁定</h1><p class="muted">請先從打卡頁完成綁定後再使用。</p></div>' + tabBar('overview'); return; }
 
     ovCur = d.date;
-    IS_ADMIN = !!d.isAdmin;
-    if (IS_ADMIN && !VIEW_EMPS) { loadViewEmps(function () { renderOverview(d); }); }
+    if (d.isAdmin) IS_ADMIN = true;
+    if (IS_ADMIN && VIEW_EMPS === null) { loadViewEmps(function () { renderOverview(d); }); }
     var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.name) + '（' + esc(d.role) + '）' + (d.viewing ? ' · 以 <b>' + esc(d.viewing) + '</b> 的視角檢視' : '') + '</div>' + viewAsBar(d.name) + ovDatebar(d);
     html += '<div class="card" style="margin-bottom:14px"><div class="myday-title">' + (d.date === d.today ? '我的今日出勤' : '我的當日出勤') + '</div>' + ovMy(d.me) + '</div>';
 

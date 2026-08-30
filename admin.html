@@ -506,21 +506,50 @@ function loadOverview(){
 }
 
 /* ===================== 打卡申請 ===================== */
+var PK_FILTER='';
 function scPunch(){
-  $('main').innerHTML=pageTop('打卡申請',false)+'<div class="toolbar">'+mstep()+'<span class="hint">補打 / 外勤,以月為單位</span></div><div class="panel"><div class="tblwrap" id="pkBody"><div class="spin">載入中…</div></div></div>';
+  $('main').innerHTML=pageTop('打卡申請',false)+
+    '<div class="toolbar">'+mstep()+'<span class="tfstat" id="pkStat"></span><span class="spacer"></span>'+
+    '<span class="hint">補打／外勤／定位異常,以月為單位</span></div>'+
+    '<div class="panel"><div class="tblwrap" id="pkBody"><div class="spin">載入中…</div></div></div>';
+  loadPunch();
+}
+function pkFilterSet(v){ PK_FILTER=v; loadPunch(); }
+function loadPunch(){
   api('admin_punchList',{ym:ymDash()}).then(function(j){
-    var b=$('pkBody'); if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
-    if(!j.list.length){ b.innerHTML='<div class="empty">本月無打卡申請</div>'; return; }
-    var h='<table class="tbl"><thead><tr><th>姓名</th><th>工地</th><th>類型</th><th>方式</th><th>日期時間</th><th>事由</th><th>狀態</th><th>核准人</th><th class="r">審核</th></tr></thead><tbody>';
-    j.list.forEach(function(r){
-      var st=r.status==='已核准'?'<span class="pill ok">已核准</span>':(r.status==='已退回'?'<span class="pill bad">已退回</span>':'<span class="pill wait">待核准</span>');
+    var b=$('pkBody'); if(!b)return;
+    if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
+    var all=j.list||[];
+    var nWait=all.filter(function(r){return r.status==='待核准';}).length;
+    var nOk=all.filter(function(r){return r.status==='已核准'||r.status==='正常';}).length;
+    var nNo=all.filter(function(r){return r.status==='已退回';}).length;
+    var st=$('pkStat');
+    if(st) st.innerHTML='<span class="tc'+(PK_FILTER===''?' on':'')+'" onclick="pkFilterSet(\'\')">全部<span class="num">'+all.length+'</span></span>'+
+      '<span class="tc'+(PK_FILTER==='待核准'?' on':'')+'" onclick="pkFilterSet(\'待核准\')" style="color:var(--amber)">待審核<span class="num">'+nWait+'</span></span>'+
+      '<span class="tc'+(PK_FILTER==='已核准'?' on':'')+'" onclick="pkFilterSet(\'已核准\')" style="color:var(--ok)">已核准<span class="num">'+nOk+'</span></span>'+
+      '<span class="tc'+(PK_FILTER==='已退回'?' on':'')+'" onclick="pkFilterSet(\'已退回\')" style="color:var(--danger)">已退回<span class="num">'+nNo+'</span></span>';
+    var list=all.filter(function(r){ if(!PK_FILTER)return true;
+      if(PK_FILTER==='已核准')return r.status==='已核准'||r.status==='正常';
+      return r.status===PK_FILTER; });
+    if(!list.length){ b.innerHTML='<div class="empty">本月沒有符合條件的打卡申請</div>'; return; }
+    var h='<table class="tbl"><thead><tr><th>姓名</th><th>工地</th><th>類型</th><th>方式</th><th>日期時間</th><th>地點／定位</th><th>事由・備註</th><th>狀態</th><th>核准人</th><th class="r">審核</th></tr></thead><tbody>';
+    list.forEach(function(r){
+      var st2=(r.status==='已核准')?'<span class="pill ok">已核准</span>'
+             :(r.status==='正常')?'<span class="pill ok">正常</span>'
+             :(r.status==='已退回')?'<span class="pill bad">已退回</span>':'<span class="pill wait">待核准</span>';
+      var mcls=(r.method==='外勤')?'info':((r.method==='定位異常')?'bad':'mut');
+      var loc=esc(r.place||'—');
+      if(r.geo==='超出範圍'||r.geo==='無定位') loc+=' <span class="pill bad" style="font-size:10px">'+esc(r.geo)+(r.dist?('・'+esc(r.dist)+'m'):'')+'</span>';
       var act=r.canAct?'<div class="actions"><button class="btn ap sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'approve\')">核准</button><button class="btn rj sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'reject\')">退回</button></div>':'<span class="hint">—</span>';
-      h+='<tr><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td><td>'+esc(r.type)+'</td><td><span class="pill '+(r.method==='外勤'?'info':'mut')+'">'+esc(r.method)+'</span></td><td class="tnum">'+esc(r.dt)+'</td><td class="muted">'+esc(r.reason||'—')+'</td><td>'+st+'</td><td>'+esc(r.appr||'—')+'</td><td class="r">'+act+'</td></tr>';
+      h+='<tr><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td><td>'+esc(r.type)+'</td>'+
+        '<td><span class="pill '+mcls+'">'+esc(r.method)+'</span></td><td class="tnum">'+esc(r.dt)+'</td>'+
+        '<td class="muted" style="font-size:12px">'+loc+'</td><td class="muted">'+esc(r.reason||'—')+'</td>'+
+        '<td>'+st2+'</td><td>'+esc(r.appr||'—')+'</td><td class="r">'+act+'</td></tr>';
     });
     b.innerHTML=h+'</tbody></table>';
   });
 }
-function actPunch(id,dec){ if(dec==='reject'&&!confirm('確定退回此申請?'))return; api('admin_approve',{recordId:id,decision:dec}).then(function(j){ if(!j.ok)alert(j.msg||'操作失敗'); scPunch(); }); }
+function actPunch(id,dec){ if(dec==='reject'&&!confirm('確定退回此申請?'))return; busyOn('處理中…'); api('admin_approve',{recordId:id,decision:dec}).then(function(j){ busyOff(); if(!j.ok){toast(j.msg||'操作失敗',true);}else{toast(dec==='approve'?'已核准':'已退回');} loadPunch(); }); }
 
 /* ===================== 調休申請 ===================== */
 function slot(am,pm){ return [am?'上午'+am:'',pm?'下午'+pm:''].filter(Boolean).join('・')||'—'; }
