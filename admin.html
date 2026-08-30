@@ -567,25 +567,29 @@ function actPunch(id,dec){ if(dec==='reject'&&!confirm('確定退回此申請?')
 var RMD=null;
 /** 依「發送對象」決定卡片標題/顏色/按鈕（與後端 _remindFlex 一致）*/
 function rmdStyle(target){
+  if(target==='role_admin'||target==='role_hr'||target==='role_admin_hr')
+    return { title:'📣 系統通知', color:'#2f6bd8', btn:'開啟系統' };
   var isOut=(target==='no_out');
   return { title:isOut?'⏰ 下班打卡提醒':'⏰ 上班打卡提醒', color:isOut?'#E29A2E':'#0E7C66',
            btn:isOut?'前往打下班卡':'前往打上班卡' };
 }
 function rmdCardHtml(target,text,time,targetLabel){
-  if(target==='boss_no_in'||target==='boss_no_out'){   // 名單卡（寄給工地負責人）
-    var isOut=(target==='boss_no_out');
-    var names=['胡興裕','鄭忠維','謝舒婷'];
+  var isList=(target==='boss_no_in'||target==='boss_no_out'||target==='admin_no_in'||target==='admin_no_out');
+  if(isList){                                        // 名單卡
+    var isOut=(target==='boss_no_out'||target==='admin_no_out');
+    var isCo=(target==='admin_no_in'||target==='admin_no_out');
+    var names=(target==='admin_no_in'||target==='admin_no_out')?['胡興裕（寶田）','林俊宏（先麥）','蘇博建（義成）']:['胡興裕','鄭忠維','謝舒婷'];
     return '<div class="lnprev">'+
-      (time?('<div class="cap">'+esc(time)+' · 依工地分別寄給「工地負責人／主管」</div>'):'')+
+      (time?('<div class="cap">'+esc(time)+' · '+(isCo?'寄給「管理員／人資」（全公司一張）':'依工地分別寄給「工地負責人／主管」')+'</div>'):'')+
       '<div class="lnbub"><div class="bd">'+
         '<div class="tt" style="color:'+(isOut?'#E29A2E':'#2f6bd8')+'">📋 今日未打'+(isOut?'下':'上')+'班卡名單</div>'+
-        '<div style="display:flex;justify-content:space-between;font-size:12px;margin:2px 0 6px"><b style="color:#666">寶田（範例）</b><span style="color:#999">共 '+names.length+' 人</span></div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;margin:2px 0 6px"><b style="color:#666">'+(isCo?'全公司':'寶田（範例）')+'</b><span style="color:#999">共 '+names.length+' 人</span></div>'+
         '<div class="sp2"></div>'+
         '<div class="tx" style="color:#333">'+names.map(function(n){return '・'+esc(n);}).join('<br>')+'</div>'+
         '<div class="sp2" style="margin:9px 0"></div>'+
         '<div class="tx" style="font-size:11px;color:#888">'+esc(text||'（請輸入提醒事項）')+'</div>'+
       '</div><div class="ft"><span class="bt" style="background:'+(isOut?'#E29A2E':'#2f6bd8')+'">查看出勤概覽</span></div></div>'+
-      '<div class="cap" style="margin:8px 0 0 4px">＊名單為範例,實際會列出該工地'+(isOut?'已上班但尚未打下班卡的人':'當天未打上班卡的人（休假者不列入）')+'</div></div>';
+      '<div class="cap" style="margin:8px 0 0 4px">＊名單為範例,實際會列出'+(isCo?'全公司':'該工地')+(isOut?'已上班但尚未打下班卡的人':'當天未打上班卡的人（休假者不列入）')+'</div></div>';
   }
   var st=rmdStyle(target);
   return '<div class="lnprev">'+
@@ -645,7 +649,7 @@ function editRemind(i){
     function(){
       busyOn('儲存中…');
       api('admin_saveReminder',{row:r.row,time:$('rTime').value,text:$('rText').value,on:$('rOn').value==='1',target:$('rTarget').value})
-        .then(function(j){ busyOff(); if(!j.ok){ toast(j.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存'); loadRemind(); });
+        .then(function(j){ busyOff(); if(!j.ok){ toast(j.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存 '+(j.time||'')); loadRemind(); });
     });
   if($('rTarget')) $('rTarget').onchange=rmdLivePrev;
   if($('rTime')) $('rTime').onchange=rmdLivePrev;
