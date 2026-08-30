@@ -108,6 +108,7 @@
   table.att th{ background:#F4F8F6; color:var(--teal-d); }
   table.att td.nm{ text-align:left; font-weight:700; }
   table.att tr.miss td{ color:#CF5B4A; }
+  table.att td.nopunch{ color:#CF5B4A; font-weight:700; font-size:12px; }
 
   /* schedule */
   .hdr h1{ font-size:19px; } .hdr p{ font-size:12px; color:var(--muted); margin:3px 0 0; }
@@ -755,7 +756,7 @@
     if (m.leave) return '<div class="myleave"><small>今日</small>' + esc(m.leave) + '</div>';
     return '<div class="myday">' +
       '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
-      '<div class="cell"><span>下班</span><b>' + esc(m.out || '—') + '</b></div>' +
+      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班</span><b>' + esc(m.out || '未打卡') + '</b></div>' +
       '</div>';
   }
   function ovActions(kind, id, canAct) {
@@ -804,7 +805,7 @@
         g.people.forEach(function (pp) {
           if (pp.leave) { html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">' + esc(pp.leave) + '</td></tr>'; return; }
           var miss = pp.in ? '' : ' class="miss"';
-          html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td>' + esc(pp.in || '—') + '</td><td>' + esc(pp.out || '—') + '</td></tr>';
+          html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td' + (pp.in ? '' : ' class="nopunch"') + '>' + esc(pp.in || '未打卡') + '</td><td' + (pp.out ? '' : ' class="nopunch"') + '>' + esc(pp.out || '未打卡') + '</td></tr>';
         });
         html += '</table></div>';
       });
