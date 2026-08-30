@@ -137,6 +137,10 @@
   .lg .sw{ width:13px; height:13px; border-radius:4px; display:inline-block; } .lg .pt{ width:9px; height:9px; border-radius:50%; display:inline-block; }
   .snote{ margin-top:11px; font-size:11.5px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:11px; padding:9px 11px; line-height:1.5; }
 
+  .vas{ display:flex; align-items:center; gap:8px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:12px; padding:8px 10px; margin-bottom:12px; }
+  .vas b{ font-size:11.5px; color:#8A5A0E; font-weight:800; white-space:nowrap; }
+  .vas select{ flex:1; border:1px solid #EBD6A8; border-radius:9px; padding:8px 10px; font-size:13.5px; background:#fff; font-family:inherit; height:auto; }
+  .vas .rst{ border:1px solid #EBD6A8; background:#fff; color:#8A5A0E; border-radius:9px; padding:7px 10px; font-size:12px; font-weight:800; font-family:inherit; white-space:nowrap; }
   /* bottom tab bar */
   .tabbar{ position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); z-index:60; }
   .tabinner{ max-width:480px; margin:0 auto; display:flex; height:62px; padding-bottom:4px; }
@@ -189,7 +193,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-30-new-03";
+  var APP_VERSION = "2026-08-30-new-04";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -272,6 +276,10 @@
     else startPunch();
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
+    }).catch(function () {});
+    post({ action: 'empListLine', idToken: me.idToken }).then(function (r) {   // 人資/管理員才會成功
+      if (r && r.ok) { IS_ADMIN = true; VIEW_EMPS = r.list;
+        var vb = document.getElementById('scViewAs'); if (vb) vb.innerHTML = viewAsBar(''); }
     }).catch(function () {});
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
@@ -665,6 +673,7 @@
     var d = new Date(); scState.year = d.getFullYear(); scState.month = d.getMonth() + 1;
     document.getElementById('wrap').innerHTML =
       '<div class="hdr"><h1>我的班表</h1><p id="scWho">當月排休與行事曆</p></div>' +
+      '<div id="scViewAs"></div>' +
       '<div class="msel"><button class="ar" id="scPrev">‹</button><span id="scYm"></span><button class="ar" id="scNext">›</button></div>' +
       '<div id="scBody"><div class="muted" style="text-align:center;padding:22px">載入中…</div></div>' + tabBar('schedule');
     document.getElementById('scPrev').onclick = function () { scShift(-1); };
@@ -679,14 +688,16 @@
   function loadSchedule() {
     document.getElementById('scYm').textContent = scState.year + ' 年 ' + scState.month + ' 月';
     document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">載入中…</div>';
-    post({ action: 'schedule', idToken: me.idToken, year: scState.year, month: scState.month })
+    post({ action: 'schedule', idToken: me.idToken, year: scState.year, month: scState.month, viewAs: VIEW_AS })
       .then(renderSchedule)
       .catch(function (e) { document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">讀取失敗：' + esc(e) + '</div>'; });
   }
   function renderSchedule(res) {
     var body = document.getElementById('scBody'); if (!body) return;
     if (!res || !res.ok) { body.innerHTML = '<div class="muted" style="text-align:center;padding:22px">' + esc((res && res.msg) || '讀取失敗') + '</div>'; return; }
-    var who = document.getElementById('scWho'); if (who) who.textContent = esc(res.name) + ' · 當月排休與行事曆';
+    var who = document.getElementById('scWho'); if (who) who.textContent = res.name + ' · 當月排休與行事曆';
+    var vbar = document.getElementById('scViewAs');
+    if (vbar) { if (IS_ADMIN && !VIEW_EMPS) loadViewEmps(function () { vbar.innerHTML = viewAsBar(res.name); }); else vbar.innerHTML = viewAsBar(res.name); }
     var y = res.year, m = res.month, leaves = res.leaves || {}, special = res.special || {}, holi = res.holidays || {};
     var dim = new Date(y, m, 0).getDate(), first = new Date(y, m - 1, 1).getDay(), wk = ['日', '一', '二', '三', '四', '五', '六'];
     var h = '<div class="cal"><div class="wk">';
@@ -721,6 +732,24 @@
   }
 
   /* ===== 出勤概覽 ===== */
+  var VIEW_AS = '', VIEW_EMPS = null, IS_ADMIN = false;
+  try { VIEW_AS = sessionStorage.getItem('qy_viewas') || ''; } catch (e) { }
+  function setViewAs(v) { VIEW_AS = v || ''; try { v ? sessionStorage.setItem('qy_viewas', v) : sessionStorage.removeItem('qy_viewas'); } catch (e) { }
+    if (P.view === 'schedule') loadSchedule(); else startOverview(); }
+  var B_Q = '\'\'';   // 產生 onclick 內的 '' 
+  function viewAsBar(curName) {
+    if (!IS_ADMIN) return '';
+    var opts = '<option value="">（我自己）</option>';
+    (VIEW_EMPS || []).forEach(function (e) { opts += '<option value="' + esc(e.empId) + '"' + (String(e.empId) === String(VIEW_AS) ? ' selected' : '') + '>' + esc(e.name + (e.site ? '（' + e.site + '）' : '')) + '</option>'; });
+    return '<div class="vas"><b>👁 視角</b><select onchange="setViewAs(this.value)">' + opts + '</select>' +
+           (VIEW_AS ? '<button class="rst" onclick="setViewAs(' + B_Q + ')">回我自己</button>' : '') + '</div>';
+  }
+  function loadViewEmps(cb) {
+    if (VIEW_EMPS) { cb && cb(); return; }
+    post({ action: 'empListLine', idToken: me.idToken }).then(function (r) {
+      if (r && r.ok) VIEW_EMPS = r.list; cb && cb();
+    }).catch(function () { cb && cb(); });
+  }
   var ovDate = '', ovCur = '';   // ovDate=送給後端的查詢日('' 表今日)；ovCur=目前顯示日
   function ovShift(n) {
     var p = ovCur.split('/'); var dt = new Date(+p[0], +p[1] - 1, +p[2]); dt.setDate(dt.getDate() + n);
@@ -742,7 +771,7 @@
   }
   function startOverview() {
     document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入出勤概覽…</div></div>';
-    post({ action: 'overview', idToken: me.idToken, date: ovDate }).then(renderOverview)
+    post({ action: 'overview', idToken: me.idToken, date: ovDate, viewAs: VIEW_AS }).then(renderOverview)
       .catch(function (e) { document.getElementById('wrap').innerHTML = '<div class="card">讀取失敗：' + esc(e) + '</div>'; });
   }
   function ovMd(s) { var p = String(s).split('/'); return p.length >= 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; }
@@ -792,7 +821,9 @@
     if (!d.bound) { w.innerHTML = '<div class="card"><h1>尚未綁定</h1><p class="muted">請先從打卡頁完成綁定後再使用。</p></div>' + tabBar('overview'); return; }
 
     ovCur = d.date;
-    var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.name) + '（' + esc(d.role) + '）</div>' + ovDatebar(d);
+    IS_ADMIN = !!d.isAdmin;
+    if (IS_ADMIN && !VIEW_EMPS) { loadViewEmps(function () { renderOverview(d); }); }
+    var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.name) + '（' + esc(d.role) + '）' + (d.viewing ? ' · 以 <b>' + esc(d.viewing) + '</b> 的視角檢視' : '') + '</div>' + viewAsBar(d.name) + ovDatebar(d);
     html += '<div class="card" style="margin-bottom:14px"><div class="myday-title">' + (d.date === d.today ? '我的今日出勤' : '我的當日出勤') + '</div>' + ovMy(d.me) + '</div>';
 
     if (d.sites && d.sites.length) {

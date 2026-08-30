@@ -218,11 +218,24 @@
   .spin{ text-align:center; color:var(--muted); padding:34px 0; }
 
   /* modal */
+  .busy{ position:fixed; inset:0; background:rgba(248,250,249,.72); backdrop-filter:blur(1.5px); display:flex; align-items:center; justify-content:center; z-index:90; }
+  .busy .box{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px 26px; box-shadow:0 12px 40px rgba(20,30,40,.16); display:flex; align-items:center; gap:12px; font-weight:700; font-size:14px; }
+  .busy .sp{ width:20px; height:20px; border:2.5px solid var(--brand-soft); border-top-color:var(--brand); border-radius:50%; animation:spin .7s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .toast{ position:fixed; left:50%; bottom:34px; transform:translateX(-50%); background:var(--brand); color:#fff; font-weight:700; font-size:14px; padding:11px 22px; border-radius:24px; box-shadow:0 8px 26px rgba(22,163,74,.35); z-index:95; animation:tin .18s ease-out; }
+  .toast.bad{ background:var(--danger); box-shadow:0 8px 26px rgba(220,38,38,.32); }
+  @keyframes tin{ from{ opacity:0; transform:translate(-50%,10px); } }
   .modal{ position:fixed; inset:0; background:rgba(15,22,30,.5); display:flex; align-items:center; justify-content:center; z-index:80; padding:16px; }
   .modal .box{ background:var(--surface); border-radius:16px; max-width:440px; width:100%; padding:20px 22px; max-height:90vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,.25); }
   .modal h3{ margin:0 0 14px; font-size:16px; font-weight:800; }
   .modal .field{ margin-bottom:12px; } .modal label{ font-size:12px; color:var(--muted); font-weight:700; display:block; margin-bottom:5px; }
   .modal input,.modal select{ width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); color:var(--ink); font-size:14px; font-family:inherit; }
+  .ppick{ display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:6px; max-height:230px; overflow:auto; border:1px solid var(--line); border-radius:10px; padding:9px; background:var(--surface-2); }
+  .ppick .pk{ display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; padding:5px 7px; border-radius:8px; background:var(--surface); border:1px solid var(--line); cursor:pointer; }
+  .ppick .pk:hover{ border-color:var(--brand); }
+  .ppick .pk input{ width:15px; height:15px; margin:0; accent-color:var(--brand); }
+  .ppick .pk.taken span{ color:var(--muted); }
+  .ppick .pk i{ font-size:9.5px; color:var(--amber); font-style:normal; margin-left:auto; }
   .modal .row2{ display:flex; gap:10px; } .modal .row2>*{ flex:1; }
   .modal .acts{ display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
 
@@ -774,7 +787,7 @@ function renderRosterScreen(){
   var tb=mstep();
   if(j.locked) tb+='<span class="spacer"></span><span class="pill bad">🔒 本月已鎖定,變更請走「調休申請」</span>'+(isLeave?'':' <button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
   else if(canEdit){
-    if(EDIT_MODE) tb+='<span class="hint">'+(isLeave?'點格循環：空白→●→特→依預訂　·　右鍵格子＝詳細　·　右鍵人名＝快速輸入':'點日期表頭＝特殊日上色')+'</span><span class="spacer"></span><button class="btn" onclick="rosterCancelEdit()">取消</button><button class="add" onclick="saveRoster()">'+(isLeave?'儲存預定':'儲存輪休表')+'</button>';
+    if(EDIT_MODE) tb+='<span class="hint">'+(isLeave?'點格循環：空白→●→特→依預訂　·　右鍵格子＝詳細　·　右鍵人名＝快速輸入':'點日期表頭＝特殊日上色')+'</span><span class="spacer"></span><button class="btn" onclick="rosterCancelEdit()">取消</button><button class="add" id="rSaveBtn" onclick="saveRoster()">'+(isLeave?'儲存預定':'儲存輪休表')+'</button>';
     else tb+='<span class="spacer"></span>'+(isLeave?'':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button><button class="btn" onclick="window.print()">列印</button>')+'<button class="add" onclick="rosterEnterEdit()">✎ 進入編輯模式</button>';
   } else tb+='<span class="spacer"></span>'+(isLeave?'<span class="hint">主管唯讀,排休由人資登錄</span>':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button><button class="btn" onclick="window.print()">列印</button>');
   $('rToolbar').innerHTML=tb;
@@ -790,9 +803,13 @@ function saveRoster(){
   var changes=Object.keys(ROSTER_CHANGES).map(function(k){return ROSTER_CHANGES[k];});
   var specials=Object.keys(SPECIAL_CHANGES).map(function(k){return {day:Number(k),type:SPECIAL_CHANGES[k]};});
   var noteEl=$('rosterNotes'); var note=noteEl?noteEl.value:undefined;
-  if(!changes.length&&!specials.length&&note===undefined){ alert('沒有變更'); return; }
+  if(!changes.length&&!specials.length&&note===undefined){ toast('沒有變更',true); return; }
+  var btn=$('rSaveBtn'); if(btn){ btn.disabled=true; btn.textContent='儲存中…'; }
+  busyOn('儲存中…（共 '+changes.length+' 筆變更）');
   api('admin_saveRosterBatch',{year:yy(),month:mm(),mode:(RSCREEN==='leave'?'draft':'actual'),changes:changes,specials:specials,note:note}).then(function(j){
-    if(!j.ok){ alert(j.msg||'儲存失敗'); return; } EDIT_MODE=false; loadRosterScreen();
+    busyOff(); if(btn){ btn.disabled=false; btn.textContent=(RSCREEN==='leave'?'儲存預定':'儲存輪休表'); }
+    if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
+    toast('已儲存 '+changes.length+' 筆'); EDIT_MODE=false; loadRosterScreen();
   });
 }
 function noteBox(note,editable){
@@ -808,9 +825,10 @@ function downloadB64(b64,filename){
 }
 function exportRosterExcel(){
   var btn=$('xlsBtn'); if(btn){ btn.disabled=true; btn.textContent='產生中…'; }
+  busyOn('產生 Excel 中…（約 5～15 秒）');
   api('admin_rosterExcel',{year:yy(),month:mm()}).then(function(j){
-    if(btn){ btn.disabled=false; btn.textContent='匯出 Excel'; }
-    if(!j.ok){ alert(j.msg||'匯出失敗'); return; } downloadB64(j.b64,j.filename);
+    busyOff(); if(btn){ btn.disabled=false; btn.textContent='匯出 Excel'; }
+    if(!j.ok){ toast(j.msg||'匯出失敗',true); return; } downloadB64(j.b64,j.filename); toast('已下載 '+j.filename);
   });
 }
 function renderPeriod(el,per,canEdit){
@@ -963,9 +981,10 @@ function loadReportBatch(){
 function exportReportExcelBatch(){
   var site=$('rpSite')?$('rpSite').value:'__all__';
   var btn=$('rpXlsAll'); if(btn){btn.disabled=true;btn.textContent='產生中…';}
+  busyOn('整廠 Excel 產生中…（人多時可能要 30 秒以上）');
   api('admin_reportExcelBatch',{site:site,year:yy(),month:mm()}).then(function(j){
-    if(btn){btn.disabled=false;btn.textContent='整廠匯出 Excel';}
-    if(!j.ok){ alert(j.msg||'匯出失敗'); return; } downloadB64(j.b64,j.filename);
+    busyOff(); if(btn){btn.disabled=false;btn.textContent='整廠匯出 Excel';}
+    if(!j.ok){ toast(j.msg||'匯出失敗',true); return; } downloadB64(j.b64,j.filename); toast('已下載 '+j.filename);
   });
 }
 function exportReportExcel(){
@@ -1060,19 +1079,63 @@ function editBase(which,idx){
     if(x==='在職狀態') return '<div class="field"><label>在職狀態</label><select id="f_'+x+'"><option'+(String(v)==='在職'?' selected':'')+'>在職</option><option'+(String(v)==='離職'?' selected':'')+'>離職</option></select></div>';
     if(x==='是否需打卡') return '<div class="field"><label>是否需打卡</label><select id="f_'+x+'"><option'+(String(v)!=='否'?' selected':'')+'>是</option><option'+(String(v)==='否'?' selected':'')+'>否</option></select></div>';
     if(x==='狀態'&&which==='geo') return '<div class="field"><label>狀態</label><select id="f_'+x+'"><option'+(String(v)!=='停用'?' selected':'')+'>啟用</option><option'+(String(v)==='停用'?' selected':'')+'>停用</option></select></div>';
+    if(which==='site'&&x==='人員名單') return peoplePicker(v,origKey);
+    if(which==='site'&&(x==='工地主管'||x==='工地負責人')) return '<div class="field"><label>'+esc(x)+'</label><select id="f_'+x+'"><option value="">（未指定）</option>'+empOptions(String(v))+'</select></div>';
     return '<div class="field"><label>'+esc(x)+'</label><input id="f_'+x+'" value="'+esc(v)+'"></div>';
   }).join('');
   modal((idx==null?'新增':'編輯')+' · '+meta.title, fields, function(){
-    var obj={}; heads.forEach(function(x){ var el=$('f_'+x); if(el) obj[x]=el.value; });
-    api('admin_saveRow',{sheet:which,origKey:origKey,row:obj}).then(function(j){ if(!j.ok){alert(j.msg||'儲存失敗');return;} closeModal(); baseScreen(which); });
+    var obj={}; heads.forEach(function(x){
+      if(which==='site'&&x==='人員名單'){ obj[x]=collectPeople(); return; }
+      var el=$('f_'+x); if(el) obj[x]=el.value; });
+    busyOn('儲存中…');
+    api('admin_saveRow',{sheet:which,origKey:origKey,row:obj}).then(function(j){ busyOff();
+      if(!j.ok){ toast(j.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存'); baseScreen(which); });
   });
 }
+/** 在職員工清單（給工地主管/負責人下拉） */
+function empOptions(cur){
+  var rows=((state.base&&state.base.emp)?state.base.emp.rows:[])||[];
+  return rows.filter(function(e){ return String(e['在職狀態']||'').trim()==='在職'; })
+    .map(function(e){ var nm=String(e['姓名']||'').trim(); return nm?('<option'+(nm===String(cur).trim()?' selected':'')+'>'+esc(nm)+'</option>'):''; }).join('');
+}
+/** 人員名單：從員工名冊勾選（會標示已被其他工地選走的人）*/
+function peoplePicker(cur,thisSite){
+  var picked={}; String(cur||'').split(/[、,，\s]+/).map(function(x){return x.trim();}).filter(Boolean).forEach(function(n){ picked[n]=1; });
+  var rows=((state.base&&state.base.emp)?state.base.emp.rows:[])||[];
+  var sites=((state.base&&state.base.site)?state.base.site.rows:[])||[];
+  var taken={};   // 姓名 → 已屬於哪個工地（排除目前這筆）
+  sites.forEach(function(r){ var sn=String(r['工地別']||'').trim(); if(!sn||sn===String(thisSite||'').trim())return;
+    String(r['人員名單']||'').split(/[、,，\s]+/).map(function(x){return x.trim();}).filter(Boolean).forEach(function(n){ taken[n]=sn; }); });
+  var list=rows.filter(function(e){ return String(e['在職狀態']||'').trim()==='在職'; });
+  var h='<div class="field"><label>人員名單（從員工名冊勾選）<span class="hint" style="font-weight:400"> — 已選 <b id="pkCount">'+Object.keys(picked).length+'</b> 人</span></label>'+
+    '<input id="pkSearch" placeholder="搜尋姓名…" oninput="pkFilter(this.value)" style="margin-bottom:8px">'+
+    '<div class="ppick" id="pkBox">';
+  list.forEach(function(e){
+    var nm=String(e['姓名']||'').trim(); if(!nm)return;
+    var tk=taken[nm];
+    h+='<label class="pk'+(tk?' taken':'')+'" data-nm="'+esc(nm)+'"'+(tk?(' title="目前屬於 '+esc(tk)+'"'):'')+'>'+
+       '<input type="checkbox" value="'+esc(nm)+'"'+(picked[nm]?' checked':'')+' onchange="pkCount()">'+
+       '<span>'+esc(nm)+'</span>'+(tk?('<i>'+esc(tk)+'</i>'):'')+'</label>';
+  });
+  h+='</div><div class="hint" style="margin-top:6px">灰字＝已被其他工地選走（一人一工地,勾了會從那邊移出,記得也去該工地取消勾選）</div></div>';
+  return h;
+}
+function pkFilter(q){ q=(q||'').trim();
+  Array.prototype.forEach.call(document.querySelectorAll('#pkBox .pk'),function(el){
+    el.style.display=(!q||el.getAttribute('data-nm').indexOf(q)>=0)?'':'none'; }); }
+function pkCount(){ var c=document.querySelectorAll('#pkBox input:checked').length; var el=$('pkCount'); if(el)el.textContent=c; }
+function collectPeople(){ return Array.prototype.map.call(document.querySelectorAll('#pkBox input:checked'),function(i){return i.value;}).join('、'); }
 function delBase(which,idx){ var meta=BASE_META[which], row=state.base[which].rows[idx], key=row[meta.key];
   if(!confirm('確定刪除「'+key+'」?此動作無法復原'))return;
   api('admin_deleteRow',{sheet:which,key:key}).then(function(j){ if(!j.ok){alert(j.msg||'刪除失敗');return;} baseScreen(which); });
 }
 
 /* ===================== 彈窗 ===================== */
+function busyOn(msg){ var d=document.createElement('div'); d.className='busy'; d.id='busyBox';
+  d.innerHTML='<div class="box"><span class="sp"></span><span>'+esc(msg||'處理中…')+'</span></div>'; document.body.appendChild(d); }
+function busyOff(){ var d=$('busyBox'); if(d)d.remove(); }
+function toast(msg,bad){ var t=document.createElement('div'); t.className='toast'+(bad?' bad':''); t.textContent=msg; document.body.appendChild(t);
+  setTimeout(function(){ t.style.transition='opacity .3s'; t.style.opacity='0'; setTimeout(function(){t.remove();},320); },1800); }
 function modal(title,body,onOk){
   $('modalHost').innerHTML='<div class="modal"><div class="box"><h3>'+esc(title)+'</h3>'+body+'<div class="acts"><button class="btn" onclick="closeModal()">取消</button><button class="btn ap" id="mOk">確定</button></div></div></div>';
   $('mOk').onclick=onOk;
