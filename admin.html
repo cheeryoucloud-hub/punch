@@ -230,6 +230,16 @@
   .modal h3{ margin:0 0 14px; font-size:16px; font-weight:800; }
   .modal .field{ margin-bottom:12px; } .modal label{ font-size:12px; color:var(--muted); font-weight:700; display:block; margin-bottom:5px; }
   .modal input,.modal select{ width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); color:var(--ink); font-size:14px; font-family:inherit; }
+  /* LINE 卡片預覽 */
+  .lnprev{ background:#8CABD8; border-radius:12px; padding:14px 12px; }
+  .lnprev .cap{ font-size:11px; color:#fff; opacity:.92; margin:0 0 6px 4px; font-weight:600; }
+  .lnbub{ background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.22); max-width:270px; }
+  .lnbub .bd{ padding:14px 15px; }
+  .lnbub .tt{ font-weight:800; font-size:16px; margin-bottom:8px; }
+  .lnbub .sp2{ height:1px; background:#eee; margin-bottom:9px; }
+  .lnbub .tx{ font-size:12.5px; color:#444; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
+  .lnbub .ft{ padding:0 15px 14px; }
+  .lnbub .bt{ display:block; text-align:center; color:#fff; font-weight:700; font-size:13.5px; padding:10px 0; border-radius:7px; }
   .ppick{ display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:6px; max-height:230px; overflow:auto; border:1px solid var(--line); border-radius:10px; padding:9px; background:var(--surface-2); }
   .ppick .pk{ display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; padding:5px 7px; border-radius:8px; background:var(--surface); border:1px solid var(--line); cursor:pointer; }
   .ppick .pk:hover{ border-color:var(--brand); }
@@ -383,10 +393,11 @@ var I={
   acct:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   work:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21h16M6 21V10l6-3 6 3v11"/></svg>',
   sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M19 5l-1 1M6 18l-1 1"/></svg>',
+  remind:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
   theme:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c-5 0-9-4-9-9z"/></svg>'
 };
 var NAV=[
-  {k:'overview',t:'總覽',g:'打卡作業'},{k:'punch',t:'打卡申請',g:'打卡作業'},
+  {k:'overview',t:'總覽',g:'打卡作業'},{k:'punch',t:'打卡申請',g:'打卡作業'},{k:'remind',t:'LINE提醒',g:'打卡作業'},
   {k:'leave',t:'休假登錄',g:'出勤作業'},{k:'transfer',t:'調休申請',g:'出勤作業'},
   {k:'roster',t:'輪休表',g:'出勤作業'},{k:'report',t:'出勤表',g:'出勤作業'},
   {k:'emp',t:'員工名冊',g:'基本資料'},{k:'site',t:'工地資料',g:'基本資料'},
@@ -396,8 +407,8 @@ function isHR(){ return ME.role==='管理員'||ME.role==='人資'; }
 function viewAll(){ return ME.role==='管理員'||ME.role==='人資'||ME.role==='主管'; }
 function allowScreens(){
   var r=ME.role;
-  if(r==='管理員') return ['overview','punch','leave','transfer','roster','report','emp','site','geo','acct'];
-  if(r==='人資') return ['overview','punch','leave','transfer','roster','report','emp','site','geo','acct'];
+  if(r==='管理員') return ['overview','punch','remind','leave','transfer','roster','report','emp','site','geo','acct'];
+  if(r==='人資') return ['overview','punch','remind','leave','transfer','roster','report','emp','site','geo','acct'];
   if(r==='主管') return ['overview','punch','leave','transfer','roster','report','emp','site','geo'];
   if(r==='工地負責人') return ['overview','punch','leave','transfer','roster'];
   return ['overview'];
@@ -451,7 +462,7 @@ function rocTitle(){ return '啓宇營造工程股份有限公司　'+(yy()-1911
 
 /* ===================== 派發 ===================== */
 function render(){
-  var scr={overview:scOverview,punch:scPunch,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct}[state.screen];
+  var scr={overview:scOverview,punch:scPunch,remind:scRemind,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct}[state.screen];
   if(scr) scr();
 }
 
@@ -550,6 +561,101 @@ function loadPunch(){
   });
 }
 function actPunch(id,dec){ if(dec==='reject'&&!confirm('確定退回此申請?'))return; busyOn('處理中…'); api('admin_approve',{recordId:id,decision:dec}).then(function(j){ busyOff(); if(!j.ok){toast(j.msg||'操作失敗',true);}else{toast(dec==='approve'?'已核准':'已退回');} loadPunch(); }); }
+
+
+/* ===================== LINE 提醒 ===================== */
+var RMD=null;
+/** 依「發送對象」決定卡片標題/顏色/按鈕（與後端 _remindFlex 一致）*/
+function rmdStyle(target){
+  var isOut=(target==='no_out');
+  return { title:isOut?'⏰ 下班打卡提醒':'⏰ 上班打卡提醒', color:isOut?'#E29A2E':'#0E7C66',
+           btn:isOut?'前往打下班卡':'前往打上班卡' };
+}
+function rmdCardHtml(target,text,time,targetLabel){
+  if(target==='boss_no_in'||target==='boss_no_out'){   // 名單卡（寄給工地負責人）
+    var isOut=(target==='boss_no_out');
+    var names=['胡興裕','鄭忠維','謝舒婷'];
+    return '<div class="lnprev">'+
+      (time?('<div class="cap">'+esc(time)+' · 依工地分別寄給「工地負責人／主管」</div>'):'')+
+      '<div class="lnbub"><div class="bd">'+
+        '<div class="tt" style="color:'+(isOut?'#E29A2E':'#2f6bd8')+'">📋 今日未打'+(isOut?'下':'上')+'班卡名單</div>'+
+        '<div style="display:flex;justify-content:space-between;font-size:12px;margin:2px 0 6px"><b style="color:#666">寶田（範例）</b><span style="color:#999">共 '+names.length+' 人</span></div>'+
+        '<div class="sp2"></div>'+
+        '<div class="tx" style="color:#333">'+names.map(function(n){return '・'+esc(n);}).join('<br>')+'</div>'+
+        '<div class="sp2" style="margin:9px 0"></div>'+
+        '<div class="tx" style="font-size:11px;color:#888">'+esc(text||'（請輸入提醒事項）')+'</div>'+
+      '</div><div class="ft"><span class="bt" style="background:'+(isOut?'#E29A2E':'#2f6bd8')+'">查看出勤概覽</span></div></div>'+
+      '<div class="cap" style="margin:8px 0 0 4px">＊名單為範例,實際會列出該工地'+(isOut?'已上班但尚未打下班卡的人':'當天未打上班卡的人（休假者不列入）')+'</div></div>';
+  }
+  var st=rmdStyle(target);
+  return '<div class="lnprev">'+
+    (time?('<div class="cap">'+esc(time)+' · 發給「'+esc(targetLabel||'')+'」</div>'):'')+
+    '<div class="lnbub"><div class="bd">'+
+      '<div class="tt" style="color:'+st.color+'">'+st.title+'</div><div class="sp2"></div>'+
+      '<div class="tx">'+esc(text||'（請輸入提醒事項）')+'</div>'+
+    '</div><div class="ft"><span class="bt" style="background:'+st.color+'">'+st.btn+'</span></div></div></div>';
+}
+function scRemind(){
+  $('main').innerHTML=pageTop('LINE 提醒',!isHR())+
+    '<div class="panel" style="padding:14px 16px"><b style="font-size:14px">每日固定時間,自動以 LINE 卡片提醒指定對象</b>'+
+    '<div class="hint" style="margin-top:6px">系統每 5 分鐘檢查一次,到點後 5 分鐘內發送;同一筆每天只發一次。未綁定 LINE 的員工不會收到。</div></div>'+
+    '<div class="toolbar">'+(isHR()?'<button class="add" onclick="editRemind(null)">＋ 新增提醒</button>':'<span class="hint">僅人資／管理員可設定</span>')+'</div>'+
+    '<div class="panel"><div class="tblwrap" id="rmdBody"><div class="spin">載入中…</div></div></div>';
+  loadRemind();
+}
+function loadRemind(){
+  api('admin_reminderList',{}).then(function(j){
+    var b=$('rmdBody'); if(!b)return;
+    if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
+    RMD=j;
+    if(!j.list.length){ b.innerHTML='<div class="empty">尚未設定提醒</div>'; return; }
+    var h='<table class="tbl"><thead><tr><th style="width:90px">每日時間</th><th>提醒事項</th><th style="width:170px">發送對象</th><th style="width:80px">啟用</th><th style="width:70px">卡片</th>'+(j.canEdit?'<th class="r" style="width:120px">操作</th>':'')+'</tr></thead><tbody>';
+    j.list.forEach(function(r,i){
+      h+='<tr><td><b style="font-size:15px">'+esc(r.time)+'</b></td>'+
+        '<td class="muted" style="line-height:1.6">'+esc(r.text)+'</td>'+
+        '<td>'+esc((j.targets||{})[r.target]||r.target)+'</td>'+
+        '<td>'+(r.on?'<span class="pill ok">啟用</span>':'<span class="pill mut">停用</span>')+'</td>'+
+        '<td><button class="btn sm" onclick="prevRemind('+i+')">👁 預覽</button></td>'+
+        (j.canEdit?('<td class="r"><div class="actions"><button class="btn sm" onclick="editRemind('+i+')">編輯</button><button class="btn rj sm" onclick="delRemind('+i+')">刪</button></div></td>'):'')+'</tr>';
+    });
+    b.innerHTML=h+'</tbody></table>';
+  });
+}
+function prevRemind(i){
+  var r=RMD.list[i], tg=RMD.targets||{};
+  modal('LINE 卡片預覽', rmdCardHtml(r.target,r.text,r.time,tg[r.target]||r.target)+
+    '<div class="hint" style="margin-top:10px">這就是員工在 LINE 收到的樣子;點按鈕會直接開啟打卡頁。</div>', function(){ closeModal(); });
+}
+function rmdLivePrev(){
+  var box=$('rPrev'); if(!box)return;
+  var tg=(RMD&&RMD.targets)||{};
+  var tgv=$('rTarget')?$('rTarget').value:'no_out';
+  box.innerHTML=rmdCardHtml(tgv, $('rText')?$('rText').value:'', $('rTime')?$('rTime').value:'', tg[tgv]||'');
+}
+function editRemind(i){
+  var r=(i===null||i===undefined)?{time:'17:20',text:'',on:true,target:'no_out',row:0}:RMD.list[i];
+  var tg=RMD.targets||{};
+  var opts=Object.keys(tg).map(function(k){ return '<option value="'+k+'"'+(k===r.target?' selected':'')+'>'+esc(tg[k])+'</option>'; }).join('');
+  modal((r.row?'編輯':'新增')+' LINE 提醒',
+    '<div class="row2"><div class="field"><label>每日時間</label><input id="rTime" type="time" value="'+esc(r.time||'17:20')+'"></div>'+
+    '<div class="field"><label>啟用</label><select id="rOn"><option value="1"'+(r.on?' selected':'')+'>啟用</option><option value="0"'+(r.on?'':' selected')+'>停用</option></select></div></div>'+
+    '<div class="field"><label>發送對象</label><select id="rTarget">'+opts+'</select></div>'+
+    '<div class="field"><label>提醒事項（LINE 卡片內容）</label><textarea id="rText" rows="6" oninput="rmdLivePrev()" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13.5px;background:var(--surface-2);color:var(--ink)">'+esc(r.text||'')+'</textarea></div>'+
+    '<div class="field"><label>卡片預覽（員工在 LINE 收到的樣子）</label><div id="rPrev"></div></div>',
+    function(){
+      busyOn('儲存中…');
+      api('admin_saveReminder',{row:r.row,time:$('rTime').value,text:$('rText').value,on:$('rOn').value==='1',target:$('rTarget').value})
+        .then(function(j){ busyOff(); if(!j.ok){ toast(j.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存'); loadRemind(); });
+    });
+  if($('rTarget')) $('rTarget').onchange=rmdLivePrev;
+  if($('rTime')) $('rTime').onchange=rmdLivePrev;
+  rmdLivePrev();
+}
+function delRemind(i){
+  var r=RMD.list[i]; if(!confirm('確定刪除這筆提醒（'+r.time+'）?'))return;
+  busyOn('刪除中…');
+  api('admin_deleteReminder',{row:r.row}).then(function(j){ busyOff(); if(!j.ok){ toast(j.msg||'刪除失敗',true); return; } toast('已刪除'); loadRemind(); });
+}
 
 /* ===================== 調休申請 ===================== */
 function slot(am,pm){ return [am?'上午'+am:'',pm?'下午'+pm:''].filter(Boolean).join('・')||'—'; }
