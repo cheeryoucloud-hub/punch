@@ -193,7 +193,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-30-new-05";
+  var APP_VERSION = "2026-08-30-new-06";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -687,9 +687,12 @@
   }
   function loadSchedule() {
     document.getElementById('scYm').textContent = scState.year + ' 年 ' + scState.month + ' 月';
-    document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">載入中…</div>';
+    var ck = 'sc_' + scState.year + '_' + scState.month + '_' + VIEW_AS;
+    var cached = lcGet(ck);
+    if (cached) renderSchedule(cached);                              // 先秒開舊畫面
+    else document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">載入中…</div>';
     post({ action: 'schedule', idToken: me.idToken, year: scState.year, month: scState.month, viewAs: VIEW_AS })
-      .then(renderSchedule)
+      .then(function (r) { if (r && r.ok) lcSet(ck, r); renderSchedule(r); })
       .catch(function (e) { document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">讀取失敗：' + esc(e) + '</div>'; });
   }
   function renderSchedule(res) {
@@ -735,6 +738,9 @@
   }
 
   /* ===== 出勤概覽 ===== */
+  /* 本地快取：先用上次的結果立刻顯示,同時背景抓最新（體感秒開） */
+  function lcGet(k) { try { var v = sessionStorage.getItem('qy_c_' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function lcSet(k, v) { try { sessionStorage.setItem('qy_c_' + k, JSON.stringify(v)); } catch (e) { } }
   var VIEW_AS = '', VIEW_EMPS = null, IS_ADMIN = false;
   try { VIEW_AS = sessionStorage.getItem('qy_viewas') || ''; } catch (e) { }
   function setViewAs(v) { VIEW_AS = v || ''; try { v ? sessionStorage.setItem('qy_viewas', v) : sessionStorage.removeItem('qy_viewas'); } catch (e) { }
@@ -776,8 +782,12 @@
       (isToday ? '' : '<button class="dtoday" onclick="ovToday()">回今日</button>') + '</div>';
   }
   function startOverview() {
-    document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入出勤概覽…</div></div>';
-    post({ action: 'overview', idToken: me.idToken, date: ovDate, viewAs: VIEW_AS }).then(renderOverview)
+    var ck = 'ov_' + (ovDate || 'today') + '_' + VIEW_AS;
+    var cached = lcGet(ck);
+    if (cached) renderOverview(cached, true);                       // 先秒開舊畫面
+    else document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入出勤概覽…</div></div>';
+    post({ action: 'overview', idToken: me.idToken, date: ovDate, viewAs: VIEW_AS })
+      .then(function (d) { if (d && d.ok) lcSet(ck, d); renderOverview(d); })
       .catch(function (e) { document.getElementById('wrap').innerHTML = '<div class="card">讀取失敗：' + esc(e) + '</div>'; });
   }
   function ovMd(s) { var p = String(s).split('/'); return p.length >= 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; }
@@ -821,14 +831,14 @@
     list.forEach(function (x) { h += (kind === 'transfer') ? ovTfCard(x) : ovPnCard(x, kind); });
     return h;
   }
-  function renderOverview(d) {
+  function renderOverview(d, isCache) {
     var w = document.getElementById('wrap');
     if (!d || !d.ok) { w.innerHTML = '<div class="card"><div class="gps err">讀取失敗：' + esc((d && d.msg) || '（無訊息）') + '</div></div>' + tabBar('overview'); return; }
     if (!d.bound) { w.innerHTML = '<div class="card"><h1>尚未綁定</h1><p class="muted">請先從打卡頁完成綁定後再使用。</p></div>' + tabBar('overview'); return; }
 
     ovCur = d.date;
     if (d.isAdmin) IS_ADMIN = true;
-    if (IS_ADMIN && VIEW_EMPS === null) { loadViewEmps(function () { renderOverview(d); }); }
+    if (!isCache && IS_ADMIN && VIEW_EMPS === null) { loadViewEmps(function () { renderOverview(d); }); }
     var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.name) + '（' + esc(d.role) + '）' + (d.viewing ? ' · 以 <b>' + esc(d.viewing) + '</b> 的視角檢視' : '') + '</div>' + viewAsBar(d.name) + ovDatebar(d);
     html += '<div class="card" style="margin-bottom:14px"><div class="myday-title">' + (d.date === d.today ? '我的今日出勤' : '我的當日出勤') + '</div>' + ovMy(d.me) + '</div>';
 
