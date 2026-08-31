@@ -725,18 +725,81 @@ function prevEvent(i){
   modal('LINE 卡片預覽 — '+e.name, rmdEventCardHtml(e)+
     '<div class="hint" style="margin-top:10px">發送對象：'+esc(e.to)+'</div>', function(){ closeModal(); });
 }
+var EVT_TO_OPTS=[
+  ['boss','工地負責人','當事人本身是負責人時,改發工地主管'],
+  ['mgr','工地主管',''],
+  ['hr','人資','所有權限為「人資」的帳號'],
+  ['admin','管理員','所有權限為「管理員」的帳號'],
+  ['self','當事人本人','送出申請/打卡的那個人'],
+  ['emp','指定員工','自行從員工名冊勾選'],
+];
 function renderEvents(evs){
   var box=$('rmdEvents'); if(!box)return;
   if(!evs.length){ box.innerHTML=''; return; }
-  var h='<div class="panel"><div style="font-weight:800;font-size:14px;margin-bottom:4px">事件觸發通知（系統自動,無需設定）</div>'+
-    '<div class="hint" style="margin-bottom:12px">以下情況一發生就會立刻以 LINE 卡片通知,不受上方排程影響。點「預覽」可看到卡片長什麼樣子。</div>'+
-    '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:150px">通知</th><th style="width:270px">發送對象</th><th>觸發時機</th><th style="width:96px">卡片</th></tr></thead><tbody>';
+  var can=RMD&&RMD.canEdit;
+  var h='<div class="panel"><div style="font-weight:800;font-size:14px;margin-bottom:4px">事件觸發通知（系統自動,無需排程）</div>'+
+    '<div class="hint" style="margin-bottom:12px">以下情況一發生就會立刻以 LINE 卡片通知。可個別調整發送對象或停用以節省 LINE 訊息額度;停用後系統仍會正常記錄,只是不發通知。</div>'+
+    '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:150px">通知</th><th style="width:250px">發送對象</th><th>觸發時機</th><th style="width:80px">啟用</th><th style="width:96px">卡片</th>'+
+    (can?'<th class="r" style="width:150px">操作</th>':'')+'</tr></thead><tbody>';
   evs.forEach(function(e,i){
-    h+='<tr><td><span class="pill" style="background:'+esc(e.color)+';color:#fff">'+esc(e.icon+' '+e.name)+'</span></td>'+
+    var on=(e.on!==false);
+    h+='<tr'+(on?'':' style="opacity:.55"')+'><td><span class="pill" style="background:'+esc(e.color)+';color:#fff">'+esc(e.icon+' '+e.name)+'</span></td>'+
       '<td>'+esc(e.to)+'</td><td class="muted">'+esc(e.when)+'</td>'+
-      '<td><button class="btn sm" style="white-space:nowrap" onclick="prevEvent('+i+')">👁 預覽</button></td></tr>';
+      '<td>'+(on?'<span class="pill ok">啟用</span>':'<span class="pill mut">停用</span>')+'</td>'+
+      '<td><button class="btn sm" style="white-space:nowrap" onclick="prevEvent('+i+')">👁 預覽</button></td>'+
+      (can?('<td class="r"><div class="actions"><button class="btn sm" style="white-space:nowrap" onclick="editEvent('+i+')">編輯對象</button>'+
+        '<button class="btn sm'+(on?' rj':' ap')+'" style="white-space:nowrap" onclick="toggleEvent('+i+')">'+(on?'停用':'啟用')+'</button></div></td>'):'')+'</tr>';
   });
   box.innerHTML=h+'</tbody></table></div></div>';
+}
+function toggleEvent(i){
+  var e=(RMD.events||[])[i]; if(!e)return;
+  var on=!(e.on!==false);
+  busyOn((on?'啟用':'停用')+'「'+e.name+'」…');
+  api('admin_setEvent',{key:e.key,on:on}).then(function(j){
+    busyOff();
+    if(!j.ok){ toast(j.msg||'設定失敗',true); return; }
+    toast('「'+e.name+'」已'+(on?'啟用':'停用')); loadRemind();
+  });
+}
+function evtPicked(){ return Array.prototype.map.call(document.querySelectorAll('#evtPick input:checked'),function(i){return i.value;}); }
+function evtToChecked(){ return Array.prototype.map.call(document.querySelectorAll('.evtTo:checked'),function(i){return i.value;}); }
+function evtSyncPick(){
+  var box=$('evtPickWrap'); if(!box)return;
+  var need=evtToChecked().indexOf('emp')>=0;
+  box.style.display=need?'block':'none';
+  if(!need){ box.innerHTML=''; return; }
+  if(box.innerHTML) return;
+  box.innerHTML='<label>指定員工（從員工名冊勾選）</label>'+
+    '<div class="ppick" id="evtPick">'+(state.rmdEmps||[]).map(function(p){
+      var id=String(p.empId), on=(state.evtEmps||[]).indexOf(id)>=0;
+      return '<label class="pk"><input type="checkbox" value="'+esc(id)+'"'+(on?' checked':'')+'><span>'+esc(p.name)+'</span>'+(p.site?('<i>'+esc(p.site)+'</i>'):'')+'</label>';
+    }).join('')+'</div>';
+}
+function editEvent(i){
+  var e=(RMD.events||[])[i]; if(!e)return;
+  var cur=e.toKeys||[]; state.evtEmps=e.emps||[];
+  var opts=EVT_TO_OPTS.map(function(o){
+    return '<label class="pk" style="width:100%;justify-content:flex-start;gap:9px">'+
+      '<input type="checkbox" class="evtTo" value="'+o[0]+'"'+(cur.indexOf(o[0])>=0?' checked':'')+' onchange="evtSyncPick()" style="width:16px;height:16px;accent-color:var(--brand)">'+
+      '<span style="font-weight:700">'+esc(o[1])+'</span>'+(o[2]?('<i style="font-style:normal;color:var(--muted);font-size:11.5px">'+esc(o[2])+'</i>'):'')+'</label>';
+  }).join('');
+  modal('發送對象 · '+e.name,
+    '<div class="field"><label>要通知誰（可複選）</label><div class="ppick" style="grid-template-columns:1fr;max-height:none">'+opts+'</div></div>'+
+    '<div class="field" id="evtPickWrap" style="display:none"></div>'+
+    '<div class="hint">同一人同時符合多個條件時只會收到一則。未綁定 LINE 的人不會收到。若已在「LINE 設定」填了群組 ID,系統會改為只發一則到群組。</div>',
+    function(){
+      var to=evtToChecked();
+      if(!to.length){ toast('請至少選一個發送對象',true); return; }
+      if(to.indexOf('emp')>=0&&!evtPicked().length){ toast('選了「指定員工」請至少勾選一位',true); return; }
+      busyOn('儲存中…');
+      api('admin_setEvent',{key:e.key,to:to,emps:evtPicked()}).then(function(j){
+        busyOff();
+        if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
+        closeModal(); toast('已更新「'+e.name+'」的發送對象'); loadRemind();
+      });
+    });
+  evtSyncPick();
 }
 function prevRemind(i){
   var r=RMD.list[i], tg=RMD.targets||{};
