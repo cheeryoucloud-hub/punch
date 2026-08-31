@@ -1261,8 +1261,8 @@ function renderRosterScreen(){
   else if(canEdit){
     if(j.locked) tb+='<span class="pill bad">🔒 已鎖定（人資／管理員仍可修正）</span>';
     if(EDIT_MODE) tb+='<span class="hint">'+(isLeave?'點格循環：空白→●→特→依預訂　·　右鍵格子＝詳細　·　右鍵人名＝快速輸入':'點日期表頭＝特殊日上色')+'</span><span class="spacer"></span><button class="btn" onclick="rosterCancelEdit()">取消</button><button class="add" id="rSaveBtn" onclick="saveRoster()">'+(isLeave?'儲存預定':'儲存輪休表')+'</button>';
-    else tb+='<span class="spacer"></span>'+(isLeave?'':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button><button class="btn" onclick="window.print()">列印</button>')+'<button class="add" onclick="rosterEnterEdit()">✎ 進入編輯模式</button>';
-  } else tb+='<span class="spacer"></span>'+(isLeave?'<span class="hint">主管唯讀,排休由人資登錄</span>':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button><button class="btn" onclick="window.print()">列印</button>');
+    else tb+='<span class="spacer"></span>'+(isLeave?'':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>')+'<button class="add" onclick="rosterEnterEdit()">✎ 進入編輯模式</button>';
+  } else tb+='<span class="spacer"></span>'+(isLeave?'<span class="hint">主管唯讀,排休由人資登錄</span>':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
   $('rToolbar').innerHTML=tb;
   var host=$('rHost'); host.className=(canEdit&&EDIT_MODE)?'editing':'';
   host.innerHTML=rosterHtml(j)+rmLegend(isLeave);
