@@ -180,14 +180,14 @@
         <option>於工務所休息</option>
       </select>
       <div id="lateWork" class="miniwarn" style="display:none">
-        ⚠️ 你選擇「仍在工作」。依法實際工作時間應計入加班,請按下方「<b>加班開始／加班結束</b>」完成加班打卡,不要直接打下班卡。
+        ⚠️ 你選擇「仍在工作」。依法實際工作時間應計入加班：請按「<b>加班開始</b>」,工作結束時按「<b>加班結束</b>」（會自動一併登記下班,不用再打下班卡）。
       </div>
     </div>
     <div class="punchbtns">
       <button class="pbtn in" id="btnIn" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M3 12h11"/><path d="M9 8l4 4-4 4"/></svg></span>上班</button>
       <button class="pbtn out" id="btnOut" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"/><path d="M21 12H10"/><path d="M17 8l4 4-4 4"/></svg></span>下班</button>
     </div>
-    <div class="otlbl">加班（於工地內按）</div>
+    <div class="otlbl">加班（於工地內按；「加班結束」會一併登記下班）</div>
     <div class="otbtns">
       <button class="otbtn" id="btnOtIn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="#0A5E4C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>加班開始</button>
       <button class="otbtn end" id="btnOtOut" disabled><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M8 3l2 2"/></svg>加班結束</button>
@@ -202,7 +202,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-31-law-01";
+  var APP_VERSION = "2026-08-31-law-02";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -469,6 +469,7 @@
     if (!res || !res.ok) { showResult(false, (res && res.msg) || '打卡失敗'); ready(); return; }
     var okStatus = (res.status === '正常' || res.status === '待核准');
     var t = '打卡成功　' + res.time;
+    if (res.alsoOut) t = '加班結束　' + res.time + '（已一併登記下班,不用再打下班卡）';
     if (res.status === '待核准') t = '外勤已送出，待主管核准';
     else if (res.status !== '正常') t = '已記錄，定位異常（' + res.status + '）';
     else if (res.distance !== '') t += '（距工地 ' + res.distance + ' 公尺）';

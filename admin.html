@@ -599,17 +599,29 @@ function rmdCardHtml(target,text,time,targetLabel,icon,title,color,showBtn){
   var foot=(showBtn===false)?'':'<div class="ft"><span class="bt" style="background:'+col+'">'+esc(p.btn)+'</span></div>';
   if(p.list){
     var isCo=(target==='admin_no_in'||target==='admin_no_out');
-    var names=isCo?['胡興裕（寶田）','林俊宏（先麥）','蘇博建（義成）']:['胡興裕','鄭忠維','謝舒婷'];
+    var body;
+    if(isCo){
+      var names=['胡興裕（寶田）','林俊宏（先麥）','蘇博建（義成）'];
+      body='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><b style="color:#666">全公司</b><span style="color:#999">共 '+names.length+' 人</span></div>'+
+        '<div class="sp2"></div><div class="tx" style="color:#333">'+names.map(function(n){return '・'+esc(n);}).join('<br>')+'</div>';
+    } else {
+      // 一位負責人/主管管多個工地 → 合併成一張（實際發送就是這樣）
+      var gs=[{s:'先麥',n:['黃茂軒','李帝宸']},{s:'松杰/石城',n:['張瑋邦']},{s:'義成',n:['賴聿哲']}];
+      var tot=0; gs.forEach(function(g){tot+=g.n.length;});
+      body='<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><b style="color:#666">共 '+tot+' 人</b><span style="color:#999">'+gs.length+' 個工地</span></div>';
+      gs.forEach(function(g){
+        body+='<div class="sp2" style="margin:8px 0 6px"></div>'+
+          '<div style="font-size:12px;font-weight:800;color:'+col+';margin-bottom:3px">'+esc(g.s)+'（'+g.n.length+'）</div>'+
+          '<div class="tx" style="color:#333">'+g.n.map(function(n){return '・'+esc(n);}).join('<br>')+'</div>';
+      });
+    }
     return '<div class="lnprev">'+
-      (time?('<div class="cap">'+esc(time)+' · '+(isCo?'寄給「管理員／人資」（全公司一張）':'依工地分別寄給「工地負責人／主管」')+'</div>'):'')+
-      '<div class="lnbub">'+head+'<div class="bd">'+
-        '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><b style="color:#666">'+(isCo?'全公司':'寶田（範例）')+'</b><span style="color:#999">共 '+names.length+' 人</span></div>'+
-        '<div class="sp2"></div>'+
-        '<div class="tx" style="color:#333">'+names.map(function(n){return '・'+esc(n);}).join('<br>')+'</div>'+
+      (time?('<div class="cap">'+esc(time)+' · '+(isCo?'寄給「管理員／人資」（全公司一張）':'寄給工地負責人／主管（一人一張,含其所有工地）')+'</div>'):'')+
+      '<div class="lnbub">'+head+'<div class="bd">'+body+
         '<div class="sp2" style="margin:9px 0"></div>'+
         '<div class="tx" style="font-size:11px;color:#888">'+esc(text||'（請輸入提醒事項）')+'</div>'+
       '</div>'+foot+'</div>'+
-      '<div class="cap" style="margin:8px 0 0 4px">＊名單為範例,實際依當天狀況產生</div></div>';
+      '<div class="cap" style="margin:8px 0 0 4px">＊名單為範例,實際依當天狀況產生;負責多個工地者會合併成一張卡</div></div>';
   }
   return '<div class="lnprev">'+
     (time?('<div class="cap">'+esc(time)+' · 發給「'+esc(targetLabel||'')+'」</div>'):'')+
@@ -1143,7 +1155,7 @@ function scReport(){
     '<select id="rpEmp"><option>載入中…</option></select><span class="spacer"></span>'+
     '<button class="add" onclick="loadReport()">產生</button>'+
     '<button class="btn" onclick="loadReportBatch()">整個工地產生</button>'+
-    '<button class="btn" id="rpXlsAll" onclick="exportReportExcelBatch()">整廠匯出 Excel</button>'+
+    '<button class="btn" id="rpXlsAll" onclick="exportReportExcelBatch()">依工地別匯出 Excel</button>'+
     '<span id="rpTools"></span></div>'+
     '<div class="panel" id="rpBody"><div class="empty">選擇員工與月份後按「產生」</div></div>';
   api('admin_empList',{needPunchOnly:true}).then(function(j){
@@ -1256,10 +1268,11 @@ function loadReportBatch(){
 }
 function exportReportExcelBatch(){
   var site=$('rpSite')?$('rpSite').value:'__all__';
+  if(!site||site==='__all__'){ toast('請先於左側選擇要匯出的工地',true); return; }
   var btn=$('rpXlsAll'); if(btn){btn.disabled=true;btn.textContent='產生中…';}
-  busyOn('整廠 Excel 產生中…（人多時可能要 30 秒以上）');
+  busyOn(site+' Excel 產生中…（人多時可能要 30 秒以上）');
   api('admin_reportExcelBatch',{site:site,year:yy(),month:mm()}).then(function(j){
-    busyOff(); if(btn){btn.disabled=false;btn.textContent='整廠匯出 Excel';}
+    busyOff(); if(btn){btn.disabled=false;btn.textContent='依工地別匯出 Excel';}
     if(!j.ok){ toast(j.msg||'匯出失敗',true); return; } downloadB64(j.b64,j.filename); toast('已下載 '+j.filename);
   });
 }
