@@ -1359,6 +1359,7 @@ function baseScreen(which){
   api('admin_listBase',{}).then(function(j){
     if(!j.ok){ $('baseBody').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗（需人資或管理員）')+'</div>'; return; }
     state.base=j.data; renderBase(which,edit);
+    if(j.pwFixed) toast('已將 '+j.pwFixed+' 組明碼密碼自動轉為 SHA-256 雜湊');
   });
 }
 function mapThumb(lat,lng,name){
