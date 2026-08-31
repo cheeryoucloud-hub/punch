@@ -682,13 +682,13 @@ function loadRemind(){
     if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
     RMD=j;
     if(!j.list.length){ b.innerHTML='<div class="empty">尚未設定提醒</div>'; return; }
-    var h='<table class="tbl"><thead><tr><th style="width:118px">時間</th><th>提醒事項</th><th style="width:170px">發送對象</th><th style="width:80px">啟用</th><th style="width:70px">卡片</th>'+(j.canEdit?'<th class="r" style="width:120px">操作</th>':'')+'</tr></thead><tbody>';
+    var h='<table class="tbl"><thead><tr><th style="width:118px">時間</th><th>提醒事項</th><th style="width:170px">發送對象</th><th style="width:80px">啟用</th><th style="width:96px">卡片</th>'+(j.canEdit?'<th class="r" style="width:120px">操作</th>':'')+'</tr></thead><tbody>';
     j.list.forEach(function(r,i){
       h+='<tr><td><b style="font-size:15px">'+esc(r.time)+'</b><div class="hint">'+(r.date?('📅 '+esc(r.date.substring(5))):'每日')+'</div></td>'+
         '<td class="muted" style="line-height:1.6">'+esc(r.text)+'</td>'+
         '<td>'+esc((j.targets||{})[r.target]||r.target)+((r.pick&&r.pick.length)?('<div class="hint">已選 '+r.pick.length+' 個</div>'):'')+'</td>'+
         '<td>'+(r.on?'<span class="pill ok">啟用</span>':'<span class="pill mut">停用</span>')+'</td>'+
-        '<td><button class="btn sm" onclick="prevRemind('+i+')">👁 預覽</button></td>'+
+        '<td><button class="btn sm" style="white-space:nowrap" onclick="prevRemind('+i+')">👁 預覽</button></td>'+
         (j.canEdit?('<td class="r"><div class="actions"><button class="btn sm" onclick="editRemind('+i+')">編輯</button><button class="btn rj sm" onclick="delRemind('+i+')">刪</button></div></td>'):'')+'</tr>';
     });
     b.innerHTML=h+'</tbody></table>';
@@ -696,15 +696,40 @@ function loadRemind(){
   });
 }
 /** 事件觸發通知（不需設定,系統自動發送）*/
+/* 事件卡片預覽（對應後端 _eventFlex：彩色標題列 + 欄位列 + 說明 + 按鈕）*/
+function rmdEventCardHtml(e){
+  var col=e.color||'#2f6bd8';
+  var rows=(e.sample||[]).map(function(r){
+    return '<div style="display:flex;gap:8px;margin-bottom:6px;align-items:baseline">'+
+      '<span style="flex:0 0 58px;font-size:12px;color:#999">'+esc(r[0])+'</span>'+
+      '<span style="flex:1;font-size:12px;color:#333;line-height:1.5">'+esc(r[1])+'</span></div>';
+  }).join('');
+  return '<div class="lnprev">'+
+    '<div class="cap">'+esc(e.when||'')+'</div>'+
+    '<div class="lnbub">'+
+      '<div style="background:'+col+';color:#fff;font-weight:800;font-size:16px;padding:13px 15px">'+esc((e.icon?e.icon+' ':'')+e.name)+'</div>'+
+      '<div class="bd">'+rows+
+        '<div class="tx" style="font-size:11px;color:#888;margin-top:8px">'+esc(e.note||'')+'</div>'+
+      '</div>'+
+      '<div class="ft"><span class="bt" style="background:'+col+'">'+esc(e.btn||'前往審核')+'</span></div>'+
+    '</div>'+
+    '<div class="cap" style="margin:8px 0 0 4px">＊內容為範例,實際依當下的打卡／申請資料產生</div></div>';
+}
+function prevEvent(i){
+  var e=(RMD.events||[])[i]; if(!e)return;
+  modal('LINE 卡片預覽 — '+e.name, rmdEventCardHtml(e)+
+    '<div class="hint" style="margin-top:10px">發送對象：'+esc(e.to)+'</div>', function(){ closeModal(); });
+}
 function renderEvents(evs){
   var box=$('rmdEvents'); if(!box)return;
   if(!evs.length){ box.innerHTML=''; return; }
   var h='<div class="panel"><div style="font-weight:800;font-size:14px;margin-bottom:4px">事件觸發通知（系統自動,無需設定）</div>'+
-    '<div class="hint" style="margin-bottom:12px">以下情況一發生就會立刻以 LINE 卡片通知,不受上方排程影響。</div>'+
-    '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:150px">通知</th><th style="width:280px">發送對象</th><th>觸發時機</th></tr></thead><tbody>';
-  evs.forEach(function(e){
+    '<div class="hint" style="margin-bottom:12px">以下情況一發生就會立刻以 LINE 卡片通知,不受上方排程影響。點「預覽」可看到卡片長什麼樣子。</div>'+
+    '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:150px">通知</th><th style="width:270px">發送對象</th><th>觸發時機</th><th style="width:96px">卡片</th></tr></thead><tbody>';
+  evs.forEach(function(e,i){
     h+='<tr><td><span class="pill" style="background:'+esc(e.color)+';color:#fff">'+esc(e.icon+' '+e.name)+'</span></td>'+
-      '<td>'+esc(e.to)+'</td><td class="muted">'+esc(e.when)+'</td></tr>';
+      '<td>'+esc(e.to)+'</td><td class="muted">'+esc(e.when)+'</td>'+
+      '<td><button class="btn sm" style="white-space:nowrap" onclick="prevEvent('+i+')">👁 預覽</button></td></tr>';
   });
   box.innerHTML=h+'</tbody></table></div></div>';
 }
@@ -1073,8 +1098,9 @@ function loadRosterScreen(){
 function renderRosterScreen(){
   var isLeave=(RSCREEN==='leave'); var j=ROSTER_DATA; var canEdit=isHR()&&j.canEdit;
   var tb=mstep();
-  if(j.locked) tb+='<span class="spacer"></span><span class="pill bad">🔒 本月已鎖定,變更請走「調休申請」</span>'+(isLeave?'':' <button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
+  if(j.locked&&!canEdit) tb+='<span class="spacer"></span><span class="pill bad">🔒 本月已鎖定,變更請走「調休申請」</span>'+(isLeave?'':' <button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
   else if(canEdit){
+    if(j.locked) tb+='<span class="pill bad">🔒 已鎖定（人資／管理員仍可修正）</span>';
     if(EDIT_MODE) tb+='<span class="hint">'+(isLeave?'點格循環：空白→●→特→依預訂　·　右鍵格子＝詳細　·　右鍵人名＝快速輸入':'點日期表頭＝特殊日上色')+'</span><span class="spacer"></span><button class="btn" onclick="rosterCancelEdit()">取消</button><button class="add" id="rSaveBtn" onclick="saveRoster()">'+(isLeave?'儲存預定':'儲存輪休表')+'</button>';
     else tb+='<span class="spacer"></span>'+(isLeave?'':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button><button class="btn" onclick="window.print()">列印</button>')+'<button class="add" onclick="rosterEnterEdit()">✎ 進入編輯模式</button>';
   } else tb+='<span class="spacer"></span>'+(isLeave?'<span class="hint">主管唯讀,排休由人資登錄</span>':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button><button class="btn" onclick="window.print()">列印</button>');
