@@ -135,6 +135,9 @@
   .lg-ttl{ font-size:10.5px; color:var(--muted); font-weight:800; }
   .lg{ font-size:11px; font-weight:800; display:flex; align-items:center; gap:4px; color:#57655f; }
   .lg .sw{ width:13px; height:13px; border-radius:4px; display:inline-block; } .lg .pt{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .rnote{ margin-top:11px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
+  .rnote b{ display:block; font-size:12px; color:var(--brand); font-weight:800; margin-bottom:5px; }
+  .rnote p{ font-size:12px; color:var(--ink); line-height:1.62; white-space:pre-line; margin:0; }
   .snote{ margin-top:11px; font-size:11.5px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:11px; padding:9px 11px; line-height:1.5; }
 
   .vas{ display:flex; align-items:center; gap:8px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:12px; padding:8px 10px; margin-bottom:12px; }
@@ -202,7 +205,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-31-law-02";
+  var APP_VERSION = "2026-08-31-fast-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -752,14 +755,42 @@
       '<span class="lg"><i class="pt" style="background:#5AA02C"></i>職安會議</span>' +
       '<span class="lg"><i class="pt" style="background:#E07B39"></i>公司活動</span>' +
       '<span class="lg"><i class="pt" style="background:#D0452F"></i>國定假日</span></div></div>';
+    var rn = String(res.note || '').trim();
+    if (rn) h += '<div class="rnote"><b>注意事項</b><p>' + esc(rn) + '</p></div>';
     h += '<div class="snote">排休與會議由人資／負責人設定，國定假日自動帶入。異動請至「調休申請」。</div>';
     body.innerHTML = h;
   }
 
   /* ===== 出勤概覽 ===== */
-  /* 本地快取：先用上次的結果立刻顯示,同時背景抓最新（體感秒開） */
-  function lcGet(k) { try { var v = sessionStorage.getItem('qy_c_' + k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
-  function lcSet(k, v) { try { sessionStorage.setItem('qy_c_' + k, JSON.stringify(v)); } catch (e) { } }
+  /* 本地快取：先用上次的結果立刻顯示,同時背景抓最新（體感秒開）
+     用 localStorage,關掉 LIFF 再打開仍然是秒開;12 小時後自動失效,最多留 40 筆 */
+  var LC_TTL = 12 * 3600 * 1000, LC_MAX = 40;
+  function lcStore() { try { return window.localStorage || window.sessionStorage; } catch (e) { return null; } }
+  function lcGet(k) {
+    try {
+      var st = lcStore(); if (!st) return null;
+      var raw = st.getItem('qy_c_' + k); if (!raw) return null;
+      var o = JSON.parse(raw);
+      if (!o || !o.t || (Date.now() - o.t) > LC_TTL) { st.removeItem('qy_c_' + k); return null; }
+      return o.v;
+    } catch (e) { return null; }
+  }
+  function lcSet(k, v) {
+    try {
+      var st = lcStore(); if (!st) return;
+      st.setItem('qy_c_' + k, JSON.stringify({ t: Date.now(), v: v }));
+      var keys = [];
+      for (var i = 0; i < st.length; i++) { var kk = st.key(i); if (kk && kk.indexOf('qy_c_') === 0) keys.push(kk); }
+      if (keys.length > LC_MAX) {
+        keys.map(function (kk) {
+          var t = 0; try { t = (JSON.parse(st.getItem(kk)) || {}).t || 0; } catch (e) { }
+          return { k: kk, t: t };
+        }).sort(function (a, b) { return a.t - b.t; }).slice(0, keys.length - LC_MAX)
+          .forEach(function (o) { try { st.removeItem(o.k); } catch (e) { } });
+      }
+    } catch (e) { }
+  }
+  function lcToday() { var d = new Date(); return d.getFullYear() + '' + (d.getMonth() + 1) + '' + d.getDate(); }
   var VIEW_AS = '', VIEW_EMPS = null, IS_ADMIN = false;
   try { VIEW_AS = sessionStorage.getItem('qy_viewas') || ''; } catch (e) { }
   function setViewAs(v) { VIEW_AS = v || ''; try { v ? sessionStorage.setItem('qy_viewas', v) : sessionStorage.removeItem('qy_viewas'); } catch (e) { }
@@ -801,7 +832,7 @@
       (isToday ? '' : '<button class="dtoday" onclick="ovToday()">回今日</button>') + '</div>';
   }
   function startOverview() {
-    var ck = 'ov_' + (ovDate || 'today') + '_' + VIEW_AS;
+    var ck = 'ov_' + lcToday() + '_' + (ovDate || 'today') + '_' + VIEW_AS;
     var cached = lcGet(ck);
     if (cached) renderOverview(cached, true);                       // 先秒開舊畫面
     else document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入出勤概覽…</div></div>';
