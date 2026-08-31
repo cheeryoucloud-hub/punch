@@ -162,6 +162,13 @@
   table.roster td.sumc{ background:#f4f8f6; font-weight:800; min-width:52px; padding:4px 8px; color:#26433c; }
   table.roster th.sumh,table.roster td.sumc{ border-left:3px solid #b9cdc6; }              /* 與日期欄拉開 */
   table.roster td.sumc.bad{ color:#c00000; background:#fdeaea; }
+  table.roster td.rcell,table.roster td.sumc{ position:relative; }
+  .maplink{ color:var(--brand); font-weight:700; text-decoration:none; white-space:nowrap; }
+  .maplink:hover{ text-decoration:underline; }
+  .cornleg{ display:inline-block; width:13px; height:13px; vertical-align:-2px; position:relative; border:1px solid #dce6e2; }
+  .cornleg::before{ content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 7px 7px 0; border-color:transparent #E29A2E transparent transparent; }
+  table.roster td.hasnote::before{ content:''; position:absolute; top:0; right:0; width:0; height:0;
+    border-style:solid; border-width:0 8px 8px 0; border-color:transparent #E29A2E transparent transparent; }  /* 有備註＝右上截角 */
   @media print{ table.roster th.sumh, table.roster td.sumc{ display:none; } }   /* 例假天數僅供螢幕核對,不印出 */
   table.roster th{ background:#eaf1ee; color:#38544d; font-weight:700; }
   table.roster .we{ background:#f8f4f1; color:#b06b45; }
@@ -529,20 +536,32 @@ function loadOverview(){
 }
 
 /* ===================== 打卡申請 ===================== */
-var PK_FILTER='';
+var PK_FILTER=''; var PK_METHOD='';
 function scPunch(){
   $('main').innerHTML=pageTop('打卡申請',false)+
-    '<div class="toolbar">'+mstep()+'<span class="tfstat" id="pkStat"></span><span class="spacer"></span>'+
+    '<div class="toolbar">'+mstep()+
+    '<select id="pkMethod" onchange="pkMethodSet(this.value)" style="min-width:130px">'+
+      ['','補打','外勤','定位異常'].map(function(m){ return '<option value="'+esc(m)+'"'+(PK_METHOD===m?' selected':'')+'>'+(m||'全部方式')+'</option>'; }).join('')+
+    '</select>'+
+    '<span class="tfstat" id="pkStat"></span><span class="spacer"></span>'+
     '<span class="hint">補打／外勤／定位異常,以月為單位</span></div>'+
     '<div class="panel"><div class="tblwrap" id="pkBody"><div class="spin">載入中…</div></div></div>';
   loadPunch();
 }
 function pkFilterSet(v){ PK_FILTER=v; loadPunch(); }
+function pkMethodSet(v){ PK_METHOD=v; loadPunch(); }
+/* 定位異常：點一下用 Google 地圖看員工實際打卡的位置 */
+function pkMapLink(r){
+  var la=Number(r.lat), ln=Number(r.lng);
+  if(!isFinite(la)||!isFinite(ln)||(!la&&!ln)) return '';
+  var u='https://www.google.com/maps/search/?api=1&query='+la+','+ln;
+  return ' <a class="maplink" href="'+u+'" target="_blank" rel="noopener" title="在 Google 地圖開啟員工打卡位置&#10;'+la.toFixed(6)+', '+ln.toFixed(6)+'">📍 查看位置</a>';
+}
 function loadPunch(){
   api('admin_punchList',{ym:ymDash()}).then(function(j){
     var b=$('pkBody'); if(!b)return;
     if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
-    var all=j.list||[];
+    var all=(j.list||[]).filter(function(r){ return !PK_METHOD||r.method===PK_METHOD; });   // 先套方式篩選
     var nWait=all.filter(function(r){return r.status==='待核准';}).length;
     var nOk=all.filter(function(r){return r.status==='已核准'||r.status==='正常';}).length;
     var nNo=all.filter(function(r){return r.status==='已退回';}).length;
@@ -563,6 +582,7 @@ function loadPunch(){
       var mcls=(r.method==='外勤')?'info':((r.method==='定位異常')?'bad':'mut');
       var loc=esc(r.place||'—');
       if(r.geo==='超出範圍'||r.geo==='無定位') loc+=' <span class="pill bad" style="font-size:10px">'+esc(r.geo)+(r.dist?('・'+esc(r.dist)+'m'):'')+'</span>';
+      if(r.method==='定位異常'||r.method==='外勤') loc+=pkMapLink(r);
       var act=r.canAct?'<div class="actions"><button class="btn ap sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'approve\')">核准</button><button class="btn rj sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'reject\')">退回</button></div>':'<span class="hint">—</span>';
       h+='<tr><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td><td>'+esc(r.type)+'</td>'+
         '<td><span class="pill '+mcls+'">'+esc(r.method)+'</span></td><td class="tnum">'+esc(r.dt)+'</td>'+
@@ -1046,9 +1066,10 @@ function symOf(am,pm){ return lvSym(am,pm); }
 function rmLegend(isDraft){
   var syms='符號：<b>●</b> 例假　<b>特</b> 特休　<b>事</b> 事假　<b>病</b> 病假　<b>婚</b> 婚假　<b>喪</b> 喪假　<b>公</b> 公假　<b>國</b> 國定';
   var sp='特殊日：<span><span class="sw" style="background:#FFFF00"></span>工務會議</span>　<span><span class="sw" style="background:#92D050"></span>職安會議</span>　<span><span class="sw" style="background:#FFC000"></span>特殊活動</span>';
-  if(isDraft) return '<div class="rmlegend">'+syms+'　｜　'+sp+'</div>';   // 休假登錄=預定草稿,無來源顏色
+  var nt='<span class="cornleg"></span>＝有備註（滑鼠移過看內容,右鍵可編輯）';
+  if(isDraft) return '<div class="rmlegend">'+syms+'　｜　'+nt+'<br style="line-height:2.2">'+sp+'</div>';   // 休假登錄=預定草稿,無來源顏色
   return '<div class="rmlegend">'+syms+'　｜　<span class="lg-plan">灰＝預定</span>　<span class="lg-adj">紅＝人資調整</span>　<span><span class="sw" style="background:#00B0F0"></span>藍底＝調休(滑過看原因)</span>　<span class="dashleg"></span>＝人資取消或調假'+
-    '<br style="line-height:2.2">'+sp+'</div>';
+    '　'+nt+'<br style="line-height:2.2">'+sp+'</div>';
 }
 /* 浮動提示（調休原因；藍格與取消○皆可）*/
 (function(){ var tip; document.addEventListener('mouseover',function(e){ var td=e.target.closest&&e.target.closest('td[data-tip]'); if(!td)return;
@@ -1058,7 +1079,12 @@ function rmLegend(isDraft){
 })();
 /* ---- 例假天數（畫面統計用,不影響匯出的 Excel）---- */
 var REST_TARGET=8;                                    // 每月應有的例假天數
-function restCell(empId){ return '<td class="sumc" data-sum="'+esc(empId)+'">—</td>'; }
+function cellNote(empId,day){ var m=(ROSTER_DATA&&ROSTER_DATA.cellNotes)||{}; return String(m[String(empId)+'_'+day]||''); }
+function restCell(empId){
+  var cn=cellNote(empId,0);
+  return '<td class="sumc'+(cn?' hasnote':'')+'" data-sum="'+esc(empId)+'" data-emp="'+esc(empId)+'" data-day="0" data-note="'+esc(cn)+'"'+
+    (cn?(' data-tip="'+esc('📝 '+cn)+'"'):'')+'>—</td>';
+}
 function refreshRestCounts(){
   var cells=document.querySelectorAll('table.roster td.sumc');
   for(var i=0;i<cells.length;i++){
@@ -1073,8 +1099,7 @@ function refreshRestCounts(){
     }
     n=Math.round(n*10)/10;
     td.textContent=String(n);
-    if(n!==REST_TARGET){ td.classList.add('bad'); td.title='例假 '+n+' 天,與應有的 '+REST_TARGET+' 天不符'; }
-    else { td.classList.remove('bad'); td.title='例假 '+n+' 天'; }
+    if(n!==REST_TARGET) td.classList.add('bad'); else td.classList.remove('bad');
   }
 }
 /* ---- 矩陣產製（照舊系統 rosterHtml）---- */
@@ -1103,20 +1128,58 @@ function rosterHtml(r){
       var sym=(e.cancelled&&e.cancelled[i])?'':symOf(am,pm);
       var we=(days[i].dow===0||days[i].dow===6)?'we ':'';
       var rd=(e.red&&e.red[i])?' radj':''; var cc=(e.cancelled&&e.cancelled[i])?' lvcancel':''; var bl=(e.blue&&e.blue[i])?' blue':'';
-      var tip=(e.tips&&e.tips[i])?(' data-tip="'+esc(e.tips[i])+'"'):'';
-      body+='<td class="'+we+'rcell'+rd+cc+bl+'" data-emp="'+esc(e.id)+'" data-day="'+(i+1)+'" data-am="'+esc(am)+'" data-pm="'+esc(pm)+'" data-dam="'+esc(dam)+'" data-dpm="'+esc(dpm)+'"'+tip+'>'+esc(sym)+'</td>';
+      var cn=cellNote(e.id,i+1);
+      var tipTxt=[(e.tips&&e.tips[i])||'', cn?('📝 '+cn):''].filter(Boolean).join('\n────────\n');
+      var tip=(tipTxt?(' data-tip="'+esc(tipTxt)+'"'):'')+' data-tipbase="'+esc((e.tips&&e.tips[i])||'')+'"';
+      body+='<td class="'+we+'rcell'+rd+cc+bl+(cn?' hasnote':'')+'" data-emp="'+esc(e.id)+'" data-day="'+(i+1)+'" data-am="'+esc(am)+'" data-pm="'+esc(pm)+'" data-dam="'+esc(dam)+'" data-dpm="'+esc(dpm)+'" data-note="'+esc(cn)+'"'+tip+'>'+esc(sym)+'</td>';
     }
     body+=restCell(e.id);
     body+='</tr>';
   });
   return '<div class="rwrap"><table class="roster">'+head+body+'</table></div>';
 }
+/* ---- 格子備註（人資右鍵新增;獨立存檔,不影響排休資料與匯出）---- */
+function noteField(cur){
+  return '<div class="field"><label>備註（留空＝清除；滑鼠移到格子會浮出）</label>'+
+    '<textarea id="cnText" rows="3" placeholder="例：家中有事,經主管同意調整" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:13px;background:var(--surface-2);color:var(--ink)">'+esc(cur||'')+'</textarea></div>';
+}
+function saveCellNote(td,txt,done){
+  var emp=td.getAttribute('data-emp'), day=Number(td.getAttribute('data-day')||0);
+  busyOn('儲存備註…');
+  api('admin_saveCellNote',{empId:emp,year:yy(),month:mm(),day:day,note:txt}).then(function(j){
+    busyOff();
+    if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
+    if(!ROSTER_DATA.cellNotes)ROSTER_DATA.cellNotes={};
+    if(j.note) ROSTER_DATA.cellNotes[emp+'_'+day]=j.note; else delete ROSTER_DATA.cellNotes[emp+'_'+day];
+    applyCellNote(td,j.note);
+    toast(j.note?'已儲存備註':'已清除備註');
+    if(done)done();
+  });
+}
+function applyCellNote(td,note){
+  var isSum=td.classList.contains('sumc');
+  td.setAttribute('data-note',note||'');
+  if(note)td.classList.add('hasnote'); else td.classList.remove('hasnote');
+  var base=isSum?'':(td.getAttribute('data-tipbase')||'');
+  var parts=[base, note?('📝 '+note):''].filter(Boolean);
+  if(parts.length)td.setAttribute('data-tip',parts.join('\n────────\n'));
+  else td.removeAttribute('data-tip');
+}
+function openCellNote(td){
+  var nm=td.closest('tr').querySelector('.rname');
+  var day=Number(td.getAttribute('data-day')||0);
+  var title=(nm?nm.textContent:'')+' · '+(day?(mm()+'/'+day+' 備註'):'例假天數備註');
+  modal(title, noteField(td.getAttribute('data-note')||''),
+    function(){ saveCellNote(td,($('cnText').value||'').trim(),closeModal); });
+}
 /* ---- 編輯互動（照舊系統）---- */
 var ROSTER_CYCLE=['rest','special','draft','clear'];
 function setRosterMode(td,mode){
   var dam=td.getAttribute('data-dam')||'', dpm=td.getAttribute('data-dpm')||'';
   var emp=td.getAttribute('data-emp'), day=Number(td.getAttribute('data-day'));
+  var keepNote=td.getAttribute('data-note')||'';
   td.classList.remove('radj','lvcancel','blue'); td.removeAttribute('data-tip'); td.setAttribute('data-mode',mode);
+  setTimeout(function(){ applyCellNote(td,keepNote); },0);
   if(mode==='draft'){ td.setAttribute('data-am',dam); td.setAttribute('data-pm',dpm); td.textContent=symOf(dam,dpm); ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:dam,pm:dpm}; refreshRestCounts(); return; }
   if(mode==='clear'){ td.setAttribute('data-am',''); td.setAttribute('data-pm',''); td.textContent=''; if(dam||dpm){ td.classList.add('lvcancel'); } ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:'',pm:''}; refreshRestCounts(); return; }
   var v=(mode==='special')?'特休':'例假';
@@ -1134,17 +1197,26 @@ var LEAVE_OPTS2=['','例假','特休','事假','喪假','病假','婚假','育�
 function openLeaveModal(td){
   var am=td.getAttribute('data-am')||'', pm=td.getAttribute('data-pm')||'';
   function sel(id,cur){ return '<select id="'+id+'">'+LEAVE_OPTS2.map(function(o){return '<option value="'+o+'"'+(o===cur?' selected':'')+'>'+(o||'（無）')+'</option>';}).join('')+'</select>'; }
-  modal('設定假別（上午 / 下午）','<div class="row2"><div class="field"><label>上午</label>'+sel('lvAM',am)+'</div><div class="field"><label>下午</label>'+sel('lvPM',pm)+'</div></div>',
-    function(){ setCellLeave(td,$('lvAM').value,$('lvPM').value); closeModal(); });
+  modal('設定假別（上午 / 下午）',
+    '<div class="row2"><div class="field"><label>上午</label>'+sel('lvAM',am)+'</div><div class="field"><label>下午</label>'+sel('lvPM',pm)+'</div></div>'+
+    noteField(td.getAttribute('data-note')||'')+
+    '<div class="hint">假別要按「儲存輪休表」才會寫入;備註按「確定」即立刻存檔。</div>',
+    function(){
+      setCellLeave(td,$('lvAM').value,$('lvPM').value);
+      var nt=($('cnText').value||'').trim();
+      if(nt!==(td.getAttribute('data-note')||'')) saveCellNote(td,nt,closeModal); else closeModal();
+    });
 }
 function setCellLeave(td,am,pm){
   var emp=td.getAttribute('data-emp'), day=Number(td.getAttribute('data-day'));
   var dam=td.getAttribute('data-dam')||'', dpm=td.getAttribute('data-dpm')||'';
+  var keepNote=td.getAttribute('data-note')||'';
   td.classList.remove('radj','lvcancel','blue'); td.removeAttribute('data-mode'); td.removeAttribute('data-tip');
   td.setAttribute('data-am',am); td.setAttribute('data-pm',pm);
   if(!am&&!pm){ td.textContent=''; if(dam||dpm)td.classList.add('lvcancel'); }
   else { td.textContent=symOf(am,pm); if(am!==dam||pm!==dpm)td.classList.add('radj'); }
   ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:am,pm:pm};
+  applyCellNote(td,keepNote);
   refreshRestCounts();
 }
 function parseDays(s){ return (s||'').split(/[,，、\s]+/).map(function(x){return parseInt(x,10);}).filter(function(n){return n>=1&&n<=31;}); }
@@ -1165,7 +1237,14 @@ function bindRosterClicks(){
   host.onclick=function(e){ if(!EDIT_MODE)return; var t=e.target.closest?e.target.closest('td,th'):null; if(!t)return;
     if(t.classList.contains('rcell')&&t.getAttribute('data-emp'))cycleRoster(t);
     else if(t.classList.contains('dcol'))cycleSpecial(t); };
-  host.oncontextmenu=function(e){ if(!EDIT_MODE)return; var t=e.target.closest?e.target.closest('td'):null; if(!t)return;
+  host.oncontextmenu=function(e){
+    var t=e.target.closest?e.target.closest('td'):null; if(!t)return;
+    var canNote=isHR()&&ROSTER_DATA&&ROSTER_DATA.canEdit;
+    if(t.classList.contains('sumc')&&t.getAttribute('data-emp')){          // 例假天數欄：純備註
+      if(!canNote)return; e.preventDefault(); openCellNote(t); return; }
+    if(!EDIT_MODE){                                                        // 非編輯模式：右鍵格子＝只改備註
+      if(canNote&&t.classList.contains('rcell')&&t.getAttribute('data-emp')){ e.preventDefault(); openCellNote(t); }
+      return; }
     if(t.classList.contains('rname')&&t.getAttribute('data-emp')){ e.preventDefault(); openQuickName(t); }
     else if(t.classList.contains('rcell')&&t.getAttribute('data-emp')){ e.preventDefault(); openLeaveModal(t); } };
 }
