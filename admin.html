@@ -1061,7 +1061,7 @@ function lvSym(am,pm){
 }
 /* ===================== 休假登錄 / 輪休表（完全照舊系統：矩陣 + 編輯模式 + 點格循環/右鍵詳細/人名快速輸入 + 特殊日上色 + 調休藍底浮動註記） ===================== */
 var SPCLS={'工務會議':'sp-y','職安會議':'sp-g','特殊活動':'sp-o','公司活動':'sp-o'};
-var ROSTER_DATA=null, ROSTER_CHANGES={}, SPECIAL_CHANGES={}, EDIT_MODE=false, RSCREEN='leave';
+var ROSTER_DATA=null, ROSTER_CHANGES={}, SPECIAL_CHANGES={}, NOTE_CHANGES={}, EDIT_MODE=false, RSCREEN='leave';
 function symOf(am,pm){ return lvSym(am,pm); }
 function rmLegend(isDraft){
   var syms='符號：<b>●</b> 例假　<b>特</b> 特休　<b>事</b> 事假　<b>病</b> 病假　<b>婚</b> 婚假　<b>喪</b> 喪假　<b>公</b> 公假　<b>國</b> 國定';
@@ -1140,21 +1140,16 @@ function rosterHtml(r){
 }
 /* ---- 格子備註（人資右鍵新增;獨立存檔,不影響排休資料與匯出）---- */
 function noteField(cur){
-  return '<div class="field"><label>備註（留空＝清除；滑鼠移到格子會浮出）</label>'+
+  return '<div class="field"><label>備註（留空＝清除；滑鼠移到格子會浮出,按「儲存」才寫入）</label>'+
     '<textarea id="cnText" rows="3" placeholder="例：家中有事,經主管同意調整" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:13px;background:var(--surface-2);color:var(--ink)">'+esc(cur||'')+'</textarea></div>';
 }
 function saveCellNote(td,txt,done){
   var emp=td.getAttribute('data-emp'), day=Number(td.getAttribute('data-day')||0);
-  busyOn('儲存備註…');
-  api('admin_saveCellNote',{empId:emp,year:yy(),month:mm(),day:day,note:txt}).then(function(j){
-    busyOff();
-    if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
-    if(!ROSTER_DATA.cellNotes)ROSTER_DATA.cellNotes={};
-    if(j.note) ROSTER_DATA.cellNotes[emp+'_'+day]=j.note; else delete ROSTER_DATA.cellNotes[emp+'_'+day];
-    applyCellNote(td,j.note);
-    toast(j.note?'已儲存備註':'已清除備註');
-    if(done)done();
-  });
+  var old=String((ROSTER_DATA&&ROSTER_DATA.cellNotes&&ROSTER_DATA.cellNotes[emp+'_'+day])||'');
+  if(txt===old) delete NOTE_CHANGES[emp+'_'+day];          // 改回原樣就不算變更
+  else NOTE_CHANGES[emp+'_'+day]={empId:emp,day:day,note:txt};
+  applyCellNote(td,txt);                                   // 畫面先反映,等按「儲存」才寫入
+  if(done)done();
 }
 function applyCellNote(td,note){
   var isSum=td.classList.contains('sumc');
@@ -1200,7 +1195,7 @@ function openLeaveModal(td){
   modal('設定假別（上午 / 下午）',
     '<div class="row2"><div class="field"><label>上午</label>'+sel('lvAM',am)+'</div><div class="field"><label>下午</label>'+sel('lvPM',pm)+'</div></div>'+
     noteField(td.getAttribute('data-note')||'')+
-    '<div class="hint">假別要按「儲存輪休表」才會寫入;備註按「確定」即立刻存檔。</div>',
+    '<div class="hint">假別與備註都要按「儲存輪休表」才會真正寫入。</div>',
     function(){
       setCellLeave(td,$('lvAM').value,$('lvPM').value);
       var nt=($('cnText').value||'').trim();
@@ -1237,15 +1232,9 @@ function bindRosterClicks(){
   host.onclick=function(e){ if(!EDIT_MODE)return; var t=e.target.closest?e.target.closest('td,th'):null; if(!t)return;
     if(t.classList.contains('rcell')&&t.getAttribute('data-emp'))cycleRoster(t);
     else if(t.classList.contains('dcol'))cycleSpecial(t); };
-  host.oncontextmenu=function(e){
-    var t=e.target.closest?e.target.closest('td'):null; if(!t)return;
-    var canNote=isHR()&&ROSTER_DATA&&ROSTER_DATA.canEdit;
-    if(t.classList.contains('sumc')&&t.getAttribute('data-emp')){          // 例假天數欄：純備註
-      if(!canNote)return; e.preventDefault(); openCellNote(t); return; }
-    if(!EDIT_MODE){                                                        // 非編輯模式：右鍵格子＝只改備註
-      if(canNote&&t.classList.contains('rcell')&&t.getAttribute('data-emp')){ e.preventDefault(); openCellNote(t); }
-      return; }
-    if(t.classList.contains('rname')&&t.getAttribute('data-emp')){ e.preventDefault(); openQuickName(t); }
+  host.oncontextmenu=function(e){ if(!EDIT_MODE)return; var t=e.target.closest?e.target.closest('td'):null; if(!t)return;
+    if(t.classList.contains('sumc')&&t.getAttribute('data-emp')){ e.preventDefault(); openCellNote(t); }   // 例假天數欄：純備註
+    else if(t.classList.contains('rname')&&t.getAttribute('data-emp')){ e.preventDefault(); openQuickName(t); }
     else if(t.classList.contains('rcell')&&t.getAttribute('data-emp')){ e.preventDefault(); openLeaveModal(t); } };
 }
 /* ---- 畫面（休假登錄=draft;輪休表=actual）---- */
@@ -1261,7 +1250,7 @@ function loadRosterScreen(){
     '<div id="rNote"></div></div>';
   api('admin_rosterTable',{year:yy(),month:mm(),draft:isLeave}).then(function(j){
     if(!j.ok){ $('rHost').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
-    ROSTER_DATA=j; state.roster=j; ROSTER_CHANGES={}; SPECIAL_CHANGES={};
+    ROSTER_DATA=j; state.roster=j; ROSTER_CHANGES={}; SPECIAL_CHANGES={}; NOTE_CHANGES={};
     renderRosterScreen();
   });
 }
@@ -1282,19 +1271,20 @@ function renderRosterScreen(){
   if(isLeave&&$('rPeriod')) renderPeriod($('rPeriod'), j.period, isHR());   // 人資/管理員永遠可設定期別(含解鎖)
   bindRosterClicks();
 }
-function rosterEnterEdit(){ EDIT_MODE=true; renderRosterScreen(); }
-function rosterCancelEdit(){ if(Object.keys(ROSTER_CHANGES).length||Object.keys(SPECIAL_CHANGES).length){ if(!confirm('有未儲存的變更,確定放棄?'))return; } EDIT_MODE=false; loadRosterScreen(); }
+function rosterEnterEdit(){ EDIT_MODE=true; NOTE_CHANGES={}; renderRosterScreen(); }
+function rosterCancelEdit(){ if(Object.keys(ROSTER_CHANGES).length||Object.keys(SPECIAL_CHANGES).length||Object.keys(NOTE_CHANGES).length){ if(!confirm('有未儲存的變更,確定放棄?'))return; } EDIT_MODE=false; NOTE_CHANGES={}; loadRosterScreen(); }
 function saveRoster(){
   var changes=Object.keys(ROSTER_CHANGES).map(function(k){return ROSTER_CHANGES[k];});
   var specials=Object.keys(SPECIAL_CHANGES).map(function(k){return {day:Number(k),type:SPECIAL_CHANGES[k]};});
+  var notes=Object.keys(NOTE_CHANGES).map(function(k){return NOTE_CHANGES[k];});
   var noteEl=$('rosterNotes'); var note=noteEl?noteEl.value:undefined;
-  if(!changes.length&&!specials.length&&note===undefined){ toast('沒有變更',true); return; }
+  if(!changes.length&&!specials.length&&!notes.length&&note===undefined){ toast('沒有變更',true); return; }
   var btn=$('rSaveBtn'); if(btn){ btn.disabled=true; btn.textContent='儲存中…'; }
-  busyOn('儲存中…（共 '+changes.length+' 筆變更）');
-  api('admin_saveRosterBatch',{year:yy(),month:mm(),mode:(RSCREEN==='leave'?'draft':'actual'),changes:changes,specials:specials,note:note}).then(function(j){
+  busyOn('儲存中…（'+changes.length+' 筆假別、'+notes.length+' 筆備註）');
+  api('admin_saveRosterBatch',{year:yy(),month:mm(),mode:(RSCREEN==='leave'?'draft':'actual'),changes:changes,specials:specials,notes:notes,note:note}).then(function(j){
     busyOff(); if(btn){ btn.disabled=false; btn.textContent=(RSCREEN==='leave'?'儲存預定':'儲存輪休表'); }
     if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
-    toast('已儲存 '+changes.length+' 筆'); EDIT_MODE=false; loadRosterScreen();
+    toast('已儲存 '+changes.length+' 筆假別'+(notes.length?('、'+notes.length+' 筆備註'):'')); EDIT_MODE=false; loadRosterScreen();
   });
 }
 function noteBox(note,editable){

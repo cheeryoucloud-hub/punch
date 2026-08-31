@@ -138,6 +138,8 @@
   .rnote{ margin-top:11px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
   .rnote b{ display:block; font-size:12px; color:var(--brand); font-weight:800; margin-bottom:5px; }
   .rnote p{ font-size:12px; color:var(--ink); line-height:1.62; white-space:pre-line; margin:0; }
+  .maplink{ display:inline-block; color:var(--brand); font-weight:800; font-size:12.5px; text-decoration:none; border:1px solid var(--brand); border-radius:8px; padding:5px 10px; }
+  .arow .warn{ color:#C0392B; font-weight:800; }
   .snote{ margin-top:11px; font-size:11.5px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:11px; padding:9px 11px; line-height:1.5; }
 
   .vas{ display:flex; align-items:center; gap:8px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:12px; padding:8px 10px; margin-bottom:12px; }
@@ -205,7 +207,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-31-fast-01";
+  var APP_VERSION = "2026-08-31-geo-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -866,10 +868,28 @@
       (x.reason ? '<div class="muted">理由：' + esc(x.reason) + '</div>' : '') +
       ovActions('transfer', x.id, x.canAct) + '</div>';
   }
+  /* 外勤／定位異常：開 Google 地圖看實際打卡位置 */
+  function ovMapLink(x) {
+    var la = Number(x.lat), ln = Number(x.lng);
+    if (!isFinite(la) || !isFinite(ln) || (!la && !ln)) return '';
+    return '<a class="maplink" href="https://www.google.com/maps/search/?api=1&query=' + la + ',' + ln +
+      '" target="_blank" rel="noopener">📍 查看打卡位置</a>';
+  }
   function ovPnCard(x, kind) {
-    var typeTxt = (kind === 'field') ? '（外勤）' : '（補打）';
+    var typeTxt = (kind === 'field') ? '（外勤）' : (kind === 'geo' ? '（定位異常）' : '（補打）');
+    var loc = '';
+    if (kind === 'geo' || kind === 'field') {
+      var bits = [];
+      if (x.place) bits.push(esc(x.place));
+      if (x.geo === '超出範圍' || x.geo === '無定位') bits.push('<b class="warn">' + esc(x.geo) + (x.dist ? ('・' + esc(x.dist) + ' 公尺') : '') + '</b>');
+      if (bits.length) loc += '<div class="muted">地點：' + bits.join('　') + '</div>';
+      var ml = ovMapLink(x);
+      if (ml) loc += '<div style="margin-top:4px">' + ml + '</div>';
+      else if (x.geo === '無定位') loc += '<div class="muted" style="margin-top:4px">（手機未取得定位,無座標可查）</div>';
+    }
     return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
       '<div class="muted">' + esc(x.date + ' ' + x.time + '　' + x.punchType) + typeTxt + '</div>' +
+      loc +
       (x.reason ? '<div class="muted">事由：' + esc(x.reason) + '</div>' : '') +
       ovActions('punch', x.recordId, x.canAct) + '</div>';
   }
@@ -913,6 +933,7 @@
     html += ovSection('調休申請', 'transfer', d.apps.transfer);
     html += ovSection('補打卡申請', 'makeup', d.apps.makeup);
     html += ovSection('外勤申請', 'field', d.apps.field);
+    html += ovSection('定位異常', 'geo', d.apps.geo);
     html += '<button class="refresh" id="ovRefresh">↻ 重新整理</button>';
     html += tabBar('overview');
     w.innerHTML = html;
