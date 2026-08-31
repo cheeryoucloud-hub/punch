@@ -157,7 +157,12 @@
   /* 輪休表(照舊系統樣式,只換配色) */
   .rwrap{ overflow-x:auto; }
   table.roster{ border-collapse:collapse; font-size:13px; width:100%; }
-  table.roster th,table.roster td{ border:1px solid #dce6e2; padding:4px 3px; text-align:center; min-width:22px; height:26px; color:var(--ink); }
+  table.roster th,table.roster td{ border:1px solid #dce6e2; padding:4px 1px; text-align:center; min-width:17px; height:26px; color:var(--ink); }
+  table.roster th.dcol,table.roster td.rcell{ width:17px; min-width:17px; max-width:22px; }
+  table.roster th.sumh{ background:#dfeae5; color:#26433c; min-width:44px; width:44px; padding:4px 4px; }
+  table.roster td.sumc{ background:#f4f8f6; font-weight:800; min-width:44px; width:44px; color:#26433c; }
+  table.roster td.sumc.bad{ color:#c00000; background:#fdeaea; }
+  @media print{ table.roster th.sumh, table.roster td.sumc{ display:none; } }   /* 例假天數僅供螢幕核對,不印出 */
   table.roster th{ background:#eaf1ee; color:#38544d; font-weight:700; }
   table.roster .we{ background:#f8f4f1; color:#b06b45; }
   table.roster .lh{ background:#e7eff2; font-weight:bold; white-space:nowrap; min-width:52px; padding:4px 8px; }
@@ -990,6 +995,27 @@ function rmLegend(isDraft){
   document.addEventListener('mousemove',function(e){ if(tip&&tip.style.display==='block'){ tip.style.left=Math.min(e.clientX+14,window.innerWidth-250)+'px'; tip.style.top=(e.clientY+16)+'px'; } });
   document.addEventListener('mouseout',function(e){ var td=e.target.closest&&e.target.closest('td[data-tip]'); if(td&&tip)tip.style.display='none'; });
 })();
+/* ---- 例假天數（畫面統計用,不影響匯出的 Excel）---- */
+var REST_TARGET=8;                                    // 每月應有的例假天數
+function restCell(empId){ return '<td class="sumc" data-sum="'+esc(empId)+'">—</td>'; }
+function refreshRestCounts(){
+  var cells=document.querySelectorAll('table.roster td.sumc');
+  for(var i=0;i<cells.length;i++){
+    var td=cells[i], tr=td.parentNode; if(!tr)continue;
+    var cs=tr.querySelectorAll('td.rcell'), n=0;
+    for(var j=0;j<cs.length;j++){
+      var c=cs[j];
+      if(c.classList.contains('lvcancel'))continue;   // 已取消/調走的不算
+      var am=String(c.getAttribute('data-am')||''), pm=String(c.getAttribute('data-pm')||'');
+      if(am.indexOf('例')>=0)n+=0.5;                   // 上午/下午各半天
+      if(pm.indexOf('例')>=0)n+=0.5;
+    }
+    n=Math.round(n*10)/10;
+    td.textContent=String(n);
+    if(n!==REST_TARGET){ td.classList.add('bad'); td.title='例假 '+n+' 天,與應有的 '+REST_TARGET+' 天不符'; }
+    else { td.classList.remove('bad'); td.title='例假 '+n+' 天'; }
+  }
+}
 /* ---- 矩陣產製（照舊系統 rosterHtml）---- */
 function rosterHtml(r){
   var g=r.days?(r.groups||[]):[];
@@ -998,12 +1024,13 @@ function rosterHtml(r){
   var days=r.days||[];
   var h1='<tr><th class="lh" rowspan="2">負責人</th><th class="lh" rowspan="2">工地負責人</th><th class="lh" rowspan="2">工地</th><th class="lh">日期</th>';
   var h2='<th class="lh">星期</th>';
+  var SUMH='<th class="sumh" rowspan="2" title="本月例假天數,應為 8 天">例假<br>天數</th>';
   days.forEach(function(d){ var sp=r.special&&r.special[d.d]; var we=(d.dow===0||d.dow===6)?'we':''; var c1=('dcol '+we+(sp?(' '+(SPCLS[sp]||'')):'')).trim();
     h1+='<th class="'+c1+'" data-day="'+d.d+'" data-sp="'+esc(sp||'')+'"'+(sp?' title="'+esc(sp)+'"':'')+'>'+d.d+'</th>';
     h2+='<th'+(we?' class="we"':'')+'>'+d.wk+'</th>'; });
-  var head=h1+'</tr><tr>'+h2+'</tr>';
+  var head=h1+SUMH+'</tr><tr>'+h2+'</tr>';
   var body='';
-  if(!g.length) body='<tr><td class="lh" colspan="'+(4+days.length)+'"><div class="empty" style="padding:20px 0">此範圍無工地資料</div></td></tr>';
+  if(!g.length) body='<tr><td class="lh" colspan="'+(5+days.length)+'"><div class="empty" style="padding:20px 0">此範圍無工地資料</div></td></tr>';
   g.forEach(function(e,idx){
     body+='<tr>';
     var bs=runspan(idx,bk); if(bs)body+='<td class="lh" rowspan="'+bs+'">'+esc(e.boss||'—')+'</td>';
@@ -1018,6 +1045,7 @@ function rosterHtml(r){
       var tip=(e.tips&&e.tips[i])?(' data-tip="'+esc(e.tips[i])+'"'):'';
       body+='<td class="'+we+'rcell'+rd+cc+bl+'" data-emp="'+esc(e.id)+'" data-day="'+(i+1)+'" data-am="'+esc(am)+'" data-pm="'+esc(pm)+'" data-dam="'+esc(dam)+'" data-dpm="'+esc(dpm)+'"'+tip+'>'+esc(sym)+'</td>';
     }
+    body+=restCell(e.id);
     body+='</tr>';
   });
   return '<div class="rwrap"><table class="roster">'+head+body+'</table></div>';
@@ -1028,12 +1056,13 @@ function setRosterMode(td,mode){
   var dam=td.getAttribute('data-dam')||'', dpm=td.getAttribute('data-dpm')||'';
   var emp=td.getAttribute('data-emp'), day=Number(td.getAttribute('data-day'));
   td.classList.remove('radj','lvcancel','blue'); td.removeAttribute('data-tip'); td.setAttribute('data-mode',mode);
-  if(mode==='draft'){ td.setAttribute('data-am',dam); td.setAttribute('data-pm',dpm); td.textContent=symOf(dam,dpm); ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:dam,pm:dpm}; return; }
-  if(mode==='clear'){ td.setAttribute('data-am',''); td.setAttribute('data-pm',''); td.textContent=''; if(dam||dpm){ td.classList.add('lvcancel'); } ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:'',pm:''}; return; }
+  if(mode==='draft'){ td.setAttribute('data-am',dam); td.setAttribute('data-pm',dpm); td.textContent=symOf(dam,dpm); ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:dam,pm:dpm}; refreshRestCounts(); return; }
+  if(mode==='clear'){ td.setAttribute('data-am',''); td.setAttribute('data-pm',''); td.textContent=''; if(dam||dpm){ td.classList.add('lvcancel'); } ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:'',pm:''}; refreshRestCounts(); return; }
   var v=(mode==='special')?'特休':'例假';
   td.setAttribute('data-am',v); td.setAttribute('data-pm',v); td.textContent=symOf(v,v);
   if(v!==dam||v!==dpm)td.classList.add('radj');
   ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:v,pm:v};
+  refreshRestCounts();
 }
 function cycleRoster(td){
   var cur=td.getAttribute('data-mode');
@@ -1055,6 +1084,7 @@ function setCellLeave(td,am,pm){
   if(!am&&!pm){ td.textContent=''; if(dam||dpm)td.classList.add('lvcancel'); }
   else { td.textContent=symOf(am,pm); if(am!==dam||pm!==dpm)td.classList.add('radj'); }
   ROSTER_CHANGES[emp+'_'+day]={empId:emp,day:day,am:am,pm:pm};
+  refreshRestCounts();
 }
 function parseDays(s){ return (s||'').split(/[,，、\s]+/).map(function(x){return parseInt(x,10);}).filter(function(n){return n>=1&&n<=31;}); }
 function applyQuickDays(emp,days,type){ var set={}; days.forEach(function(d){set[d]=1;}); Array.prototype.forEach.call(document.querySelectorAll('#rHost td.rcell'),function(td){ if(td.getAttribute('data-emp')===emp&&set[Number(td.getAttribute('data-day'))])setCellLeave(td,type,type); }); }
@@ -1107,6 +1137,7 @@ function renderRosterScreen(){
   $('rToolbar').innerHTML=tb;
   var host=$('rHost'); host.className=(canEdit&&EDIT_MODE)?'editing':'';
   host.innerHTML=rosterHtml(j)+rmLegend(isLeave);
+  refreshRestCounts();
   $('rNote').innerHTML=isLeave?'':noteBox(j.note, canEdit&&EDIT_MODE);   // 注意事項只在輪休表
   if(isLeave&&$('rPeriod')) renderPeriod($('rPeriod'), j.period, isHR());   // 人資/管理員永遠可設定期別(含解鎖)
   bindRosterClicks();
