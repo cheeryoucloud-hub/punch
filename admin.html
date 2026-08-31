@@ -1239,9 +1239,12 @@ function bindRosterClicks(){
 }
 /* ---- 畫面（休假登錄=draft;輪休表=actual）---- */
 /* 休假登錄=進畫面直接載入;輪休表=先選工地再按「產生」 */
-function scLeave(){ RSCREEN='leave'; EDIT_MODE=false; RGEN=true;  state.screen='leave';  renderNav(); loadRosterScreen(); }   // 工地選擇沿用上次
+function scLeave(){
+  RSCREEN='leave'; EDIT_MODE=false; RGEN=true; state.screen='leave'; renderNav();
+  loadRosterScreen(true);        // true＝以人資設定的「目前登錄期別」為預設畫面
+}
 function scRoster(){ RSCREEN='roster'; EDIT_MODE=false; RGEN=false; state.screen='roster'; renderNav(); loadRosterScreen(); }  // 換月/重進都要重按「產生」
-function loadRosterScreen(){
+function loadRosterScreen(useOpen){
   var isLeave=(RSCREEN==='leave');
   $('main').innerHTML=pageTop(isLeave?'休假登錄':'輪休表',false)+
     (isLeave?'<div id="rPeriod"></div>':'')+
@@ -1249,8 +1252,9 @@ function loadRosterScreen(){
     '<div class="panel"><div class="rmtitle">'+rocTitle()+(isLeave?' · 休假登錄':'')+'</div><div id="rHost"><div class="spin">載入中…</div></div>'+
     (isLeave?'':'<div class="sigfoot" style="grid-template-columns:repeat(3,1fr);margin-top:22px"><div>協理</div><div>經理</div><div>製表</div></div>')+
     '<div id="rNote"></div></div>';
-  api('admin_rosterTable',{year:yy(),month:mm(),draft:isLeave,site:RSITE,optsOnly:!RGEN}).then(function(j){
+  api('admin_rosterTable',{year:yy(),month:mm(),draft:isLeave,site:RSITE,optsOnly:!RGEN,useOpenPeriod:!!useOpen}).then(function(j){
     if(!j.ok){ $('rHost').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
+    if(j.year&&j.month) state.ym=j.year+'/'+p2(j.month);      // 後端可能把月份換成登錄期別
     ROSTER_DATA=j; state.roster=j; ROSTER_CHANGES={}; SPECIAL_CHANGES={}; NOTE_CHANGES={};
     if(j.optsOnly) renderRosterPick(); else renderRosterScreen();
   });
@@ -1268,8 +1272,7 @@ function rosterGen(){ RGEN=true; loadRosterScreen(); }
 function rSiteSet(v){
   if(Object.keys(ROSTER_CHANGES).length||Object.keys(SPECIAL_CHANGES).length||Object.keys(NOTE_CHANGES).length){
     if(!confirm('有未儲存的變更,切換工地會放棄,確定?')){ var el=$('rSite'); if(el)el.value=RSITE; return; } }
-  RSITE=v; EDIT_MODE=false;
-  if(RSCREEN==='roster') RGEN=false;          // 輪休表：換工地要重新按「產生」
+  RSITE=v; EDIT_MODE=false; RGEN=true;        // 選了工地就直接產生,不必再按一次
   loadRosterScreen();
 }
 function rSiteBox(j){
@@ -1345,7 +1348,7 @@ function renderPeriod(el,per,canEdit){
 /* 目前開放登錄的期別（不一定是畫面上這個月）*/
 function openPeriodBar(){
   var ops=(ROSTER_DATA&&ROSTER_DATA.openPeriods)||[];
-  if(!ops.length) return '<span class="pill mut" style="margin-left:2px">目前沒有開放中的期別</span>';
+  if(!ops.length) return '<span class="pill mut" style="margin-left:2px">尚未設定登錄期別</span>';
   var cy=yy(), cm=mm();
   var chips=ops.map(function(o){
     var here=(o.year===cy&&o.month===cm);
@@ -1353,7 +1356,7 @@ function openPeriodBar(){
       (here?'':(' onclick="goPeriod('+o.year+','+o.month+')" title="切換到這個期別"'))+'>'+
       o.rocYear+'年'+o.month+'月'+(o.lock?'（已鎖定）':'')+(here?' · 目前顯示中':'')+'</span>';
   }).join(' ');
-  return '<span class="hint" style="margin-left:6px">目前開放登錄：</span>'+chips;
+  return '<span class="hint" style="margin-left:6px">目前登錄期別：</span>'+chips;
 }
 function goPeriod(y,m){
   if(Object.keys(ROSTER_CHANGES).length||Object.keys(SPECIAL_CHANGES).length||Object.keys(NOTE_CHANGES).length){
@@ -1361,9 +1364,10 @@ function goPeriod(y,m){
   state.ym=y+'/'+p2(m); EDIT_MODE=false; loadRosterScreen();
 }
 function editPeriod(open,lock){
-  modal('登錄期別設定（'+yy()+' / '+p2(mm())+'）',
-    '<div class="field"><label>開放登錄</label><select id="mOpen"><option value="1"'+(open?' selected':'')+'>開放</option><option value="0"'+(open?'':' selected')+'>不開放</option></select></div>'+
-    '<div class="field"><label>鎖定（鎖定後不可修改）</label><select id="mLock"><option value="0"'+(lock?'':' selected')+'>未鎖定</option><option value="1"'+(lock?' selected':'')+'>鎖定</option></select></div>',
+  modal('設定目前登錄期別（'+yy()+' 年 '+mm()+' 月）',
+    '<div class="field"><label>開放登錄</label><select id="mOpen"><option value="1"'+(open?' selected':'')+'>開放（設為目前登錄期別）</option><option value="0"'+(open?'':' selected')+'>不開放</option></select></div>'+
+    '<div class="field"><label>鎖定（鎖定後不可修改）</label><select id="mLock"><option value="0"'+(lock?'':' selected')+'>未鎖定</option><option value="1"'+(lock?' selected':'')+'>鎖定</option></select></div>'+
+    '<div class="hint">同時只會有一個登錄期別。設為開放時,系統會自動把其他月份改為未開放,工地負責人進入「休假登錄」也會直接看到這個月。</div>',
     function(){ api('admin_period',{set:true,year:yy(),month:mm(),open:$('mOpen').value==='1',lock:$('mLock').value==='1'}).then(function(j){ if(!j.ok){alert(j.msg||'失敗');return;} closeModal(); render(); }); });
 }
 function editLeave(empId,name,day){
