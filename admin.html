@@ -156,11 +156,11 @@
 
   /* 輪休表(照舊系統樣式,只換配色) */
   .rwrap{ overflow-x:auto; }
-  table.roster{ border-collapse:collapse; font-size:13px; width:100%; }
-  table.roster th,table.roster td{ border:1px solid #dce6e2; padding:4px 1px; text-align:center; min-width:17px; height:26px; color:var(--ink); }
-  table.roster th.dcol,table.roster td.rcell{ width:17px; min-width:17px; max-width:22px; }
-  table.roster th.sumh{ background:#dfeae5; color:#26433c; min-width:44px; width:44px; padding:4px 4px; }
-  table.roster td.sumc{ background:#f4f8f6; font-weight:800; min-width:44px; width:44px; color:#26433c; }
+  table.roster{ border-collapse:collapse; font-size:13px; width:100%; max-width:1240px; margin:0 auto; }  /* 有上限,不會被撐開 */
+  table.roster th,table.roster td{ border:1px solid #dce6e2; padding:4px 2px; text-align:center; min-width:19px; height:26px; color:var(--ink); white-space:nowrap; }
+  table.roster th.sumh{ background:#dfeae5; color:#26433c; min-width:52px; padding:4px 8px; line-height:1.25; }
+  table.roster td.sumc{ background:#f4f8f6; font-weight:800; min-width:52px; padding:4px 8px; color:#26433c; }
+  table.roster th.sumh,table.roster td.sumc{ border-left:3px solid #b9cdc6; }              /* 與日期欄拉開 */
   table.roster td.sumc.bad{ color:#c00000; background:#fdeaea; }
   @media print{ table.roster th.sumh, table.roster td.sumc{ display:none; } }   /* 例假天數僅供螢幕核對,不印出 */
   table.roster th{ background:#eaf1ee; color:#38544d; font-weight:700; }
