@@ -616,7 +616,8 @@ function scRemind(){
     '<div class="hint" style="margin-top:6px">系統每 5 分鐘檢查一次,到點後 5 分鐘內發送;同一筆每天只發一次。未綁定 LINE 的員工不會收到。</div></div>'+
     '<div id="rmdQuota"></div>'+
     '<div class="toolbar">'+(isHR()?'<button class="add" onclick="editRemind(null)">＋ 新增提醒</button>':'<span class="hint">僅人資／管理員可設定</span>')+'</div>'+
-    '<div class="panel"><div class="tblwrap" id="rmdBody"><div class="spin">載入中…</div></div></div>';
+    '<div class="panel"><div class="tblwrap" id="rmdBody"><div class="spin">載入中…</div></div></div>'+
+    '<div id="rmdEvents"></div>';
   loadRemind(); loadQuota();
 }
 function loadQuota(){
@@ -636,7 +637,8 @@ function loadQuota(){
         '<div style="height:100%;width:'+pct+'%;background:'+col+'"></div></div>'+
       '<div class="hint" style="margin-top:7px">'+
         (j.group?('已設主管群組 ✅ 異常／申請通知只發群組一則（省額度）'):('⚠️ 未設主管群組：異常／申請通知會逐一私訊負責人與主管,較耗額度'))+
-        '　免費方案每月 200 則,超過會直接發送失敗（不會補發）。</div>'+
+        '</div>'+
+      '<div class="hint" style="margin-top:4px">＊此為系統自行統計,<b>實際則數以 LINE 官方後台為準</b>（手動發送、群發等不會計入此處）。免費方案每月 200 則,超過會直接發送失敗且不補發。</div>'+
       '</div>';
   });
 }
@@ -644,10 +646,12 @@ function editLineSet(cap){
   api('admin_lineSettings',{}).then(function(j){
     modal('LINE 設定',
       '<div class="field"><label>主管通知群組 ID（留空＝逐一私訊）</label><input id="lsGroup" value="'+esc(j.group||'')+'" placeholder="Cxxxxxxxxxxxxxxxx"><div class="hint" style="margin-top:4px">填了之後,打卡異常／外勤／補打／調休通知只會發到群組一則,可省下大量額度。</div></div>'+
-      '<div class="field"><label>每月額度上限（免費方案 200）</label><input id="lsCap" type="number" value="'+(j.cap||200)+'"></div>',
+      '<div class="field"><label>每月額度上限（免費方案 200）</label><input id="lsCap" type="number" value="'+(j.cap||200)+'"></div>'+
+      '<div class="field"><label>本月已發送則數（校正用）</label><input id="lsUsed" type="number" value="'+(j.used||0)+'">'+
+        '<div class="hint" style="margin-top:4px">請以 <b>LINE 官方帳號後台</b> 顯示的「已傳送訊息數」為準,填入後系統會以此為基準繼續累計。</div></div>',
       function(){
         busyOn('儲存中…');
-        api('admin_lineSettings',{set:true,group:$('lsGroup').value,cap:$('lsCap').value}).then(function(r){
+        api('admin_lineSettings',{set:true,group:$('lsGroup').value,cap:$('lsCap').value,used:$('lsUsed').value}).then(function(r){
           busyOff(); if(!r.ok){ toast(r.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存'); loadQuota();
         });
       });
@@ -670,7 +674,21 @@ function loadRemind(){
         (j.canEdit?('<td class="r"><div class="actions"><button class="btn sm" onclick="editRemind('+i+')">編輯</button><button class="btn rj sm" onclick="delRemind('+i+')">刪</button></div></td>'):'')+'</tr>';
     });
     b.innerHTML=h+'</tbody></table>';
+    renderEvents(j.events||[]);
   });
+}
+/** 事件觸發通知（不需設定,系統自動發送）*/
+function renderEvents(evs){
+  var box=$('rmdEvents'); if(!box)return;
+  if(!evs.length){ box.innerHTML=''; return; }
+  var h='<div class="panel"><div style="font-weight:800;font-size:14px;margin-bottom:4px">事件觸發通知（系統自動,無需設定）</div>'+
+    '<div class="hint" style="margin-bottom:12px">以下情況一發生就會立刻以 LINE 卡片通知,不受上方排程影響。</div>'+
+    '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:150px">通知</th><th style="width:280px">發送對象</th><th>觸發時機</th></tr></thead><tbody>';
+  evs.forEach(function(e){
+    h+='<tr><td><span class="pill" style="background:'+esc(e.color)+';color:#fff">'+esc(e.icon+' '+e.name)+'</span></td>'+
+      '<td>'+esc(e.to)+'</td><td class="muted">'+esc(e.when)+'</td></tr>';
+  });
+  box.innerHTML=h+'</tbody></table></div></div>';
 }
 function prevRemind(i){
   var r=RMD.list[i], tg=RMD.targets||{};
