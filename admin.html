@@ -1061,7 +1061,7 @@ function lvSym(am,pm){
 }
 /* ===================== 休假登錄 / 輪休表（完全照舊系統：矩陣 + 編輯模式 + 點格循環/右鍵詳細/人名快速輸入 + 特殊日上色 + 調休藍底浮動註記） ===================== */
 var SPCLS={'工務會議':'sp-y','職安會議':'sp-g','特殊活動':'sp-o','公司活動':'sp-o'};
-var ROSTER_DATA=null, ROSTER_CHANGES={}, SPECIAL_CHANGES={}, NOTE_CHANGES={}, EDIT_MODE=false, RSCREEN='leave';
+var ROSTER_DATA=null, ROSTER_CHANGES={}, SPECIAL_CHANGES={}, NOTE_CHANGES={}, EDIT_MODE=false, RSCREEN='leave', RSITE='__all__';
 function symOf(am,pm){ return lvSym(am,pm); }
 function rmLegend(isDraft){
   var syms='符號：<b>●</b> 例假　<b>特</b> 特休　<b>事</b> 事假　<b>病</b> 病假　<b>婚</b> 婚假　<b>喪</b> 喪假　<b>公</b> 公假　<b>國</b> 國定';
@@ -1238,8 +1238,8 @@ function bindRosterClicks(){
     else if(t.classList.contains('rcell')&&t.getAttribute('data-emp')){ e.preventDefault(); openLeaveModal(t); } };
 }
 /* ---- 畫面（休假登錄=draft;輪休表=actual）---- */
-function scLeave(){ RSCREEN='leave'; EDIT_MODE=false; state.screen='leave'; renderNav(); loadRosterScreen(); }
-function scRoster(){ RSCREEN='roster'; EDIT_MODE=false; state.screen='roster'; renderNav(); loadRosterScreen(); }
+function scLeave(){ RSCREEN='leave'; EDIT_MODE=false; RSITE='__all__'; state.screen='leave'; renderNav(); loadRosterScreen(); }
+function scRoster(){ RSCREEN='roster'; EDIT_MODE=false; RSITE='__all__'; state.screen='roster'; renderNav(); loadRosterScreen(); }
 function loadRosterScreen(){
   var isLeave=(RSCREEN==='leave');
   $('main').innerHTML=pageTop(isLeave?'休假登錄':'輪休表',false)+
@@ -1248,15 +1248,28 @@ function loadRosterScreen(){
     '<div class="panel"><div class="rmtitle">'+rocTitle()+(isLeave?' · 休假登錄':'')+'</div><div id="rHost"><div class="spin">載入中…</div></div>'+
     (isLeave?'':'<div class="sigfoot" style="grid-template-columns:repeat(3,1fr);margin-top:22px"><div>協理</div><div>經理</div><div>製表</div></div>')+
     '<div id="rNote"></div></div>';
-  api('admin_rosterTable',{year:yy(),month:mm(),draft:isLeave}).then(function(j){
+  api('admin_rosterTable',{year:yy(),month:mm(),draft:isLeave,site:RSITE}).then(function(j){
     if(!j.ok){ $('rHost').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
     ROSTER_DATA=j; state.roster=j; ROSTER_CHANGES={}; SPECIAL_CHANGES={}; NOTE_CHANGES={};
     renderRosterScreen();
   });
 }
+function rSiteSet(v){
+  if(Object.keys(ROSTER_CHANGES).length||Object.keys(SPECIAL_CHANGES).length||Object.keys(NOTE_CHANGES).length){
+    if(!confirm('有未儲存的變更,切換工地會放棄,確定?')){ var el=$('rSite'); if(el)el.value=RSITE; return; } }
+  RSITE=v; EDIT_MODE=false; loadRosterScreen();
+}
+function rSiteBox(j){
+  var opts=(j.siteOpts||[]);
+  if(!opts.length) return '';
+  return '<select id="rSite" onchange="rSiteSet(this.value)" style="min-width:130px">'+
+    '<option value="__all__">全部工地</option>'+
+    opts.map(function(x){ return '<option value="'+esc(x)+'"'+(RSITE===x?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+
+    '</select>';
+}
 function renderRosterScreen(){
   var isLeave=(RSCREEN==='leave'); var j=ROSTER_DATA; var canEdit=isHR()&&j.canEdit;
-  var tb=mstep();
+  var tb=mstep()+rSiteBox(j);
   if(j.locked&&!canEdit) tb+='<span class="spacer"></span><span class="pill bad">🔒 本月已鎖定,變更請走「調休申請」</span>'+(isLeave?'':' <button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
   else if(canEdit){
     if(j.locked) tb+='<span class="pill bad">🔒 已鎖定（人資／管理員仍可修正）</span>';
@@ -1301,7 +1314,7 @@ function downloadB64(b64,filename){
 function exportRosterExcel(){
   var btn=$('xlsBtn'); if(btn){ btn.disabled=true; btn.textContent='產生中…'; }
   busyOn('產生 Excel 中…（約 5～15 秒）');
-  api('admin_rosterExcel',{year:yy(),month:mm()}).then(function(j){
+  api('admin_rosterExcel',{year:yy(),month:mm(),site:RSITE}).then(function(j){
     busyOff(); if(btn){ btn.disabled=false; btn.textContent='匯出 Excel'; }
     if(!j.ok){ toast(j.msg||'匯出失敗',true); return; } downloadB64(j.b64,j.filename); toast('已下載 '+j.filename);
   });
