@@ -1249,7 +1249,7 @@ function loadRosterScreen(useOpen){
   $('main').innerHTML=pageTop(isLeave?'休假登錄':'輪休表',false)+
     (isLeave?'<div id="rPeriod"></div>':'')+
     '<div class="toolbar noprint" id="rToolbar"></div>'+
-    '<div class="panel"><div class="rmtitle">'+rocTitle()+(isLeave?' · 休假登錄':'')+'</div><div id="rHost"><div class="spin">載入中…</div></div>'+
+    '<div class="panel"><div class="rmtitle" id="rmTitle">'+rocTitle()+(isLeave?' · 休假登錄':'')+'</div><div id="rHost"><div class="spin">載入中…</div></div>'+
     (isLeave?'':'<div class="sigfoot" style="grid-template-columns:repeat(3,1fr);margin-top:22px"><div>協理</div><div>經理</div><div>製表</div></div>')+
     '<div id="rNote"></div></div>';
   api('admin_rosterTable',{year:yy(),month:mm(),draft:isLeave,site:RSITE,optsOnly:!RGEN,useOpenPeriod:!!useOpen}).then(function(j){
@@ -1260,8 +1260,11 @@ function loadRosterScreen(useOpen){
   });
 }
 /* 尚未產生時的畫面：只有工具列與提示 */
+function rmSyncTitle(){
+  var t=$('rmTitle'); if(t) t.innerHTML=rocTitle()+((RSCREEN==='leave')?' · 休假登錄':'');
+}
 function renderRosterPick(){
-  var j=ROSTER_DATA;
+  var j=ROSTER_DATA; rmSyncTitle();
   $('rToolbar').innerHTML=mstep()+rSiteBox(j)+
     '<button class="add" onclick="rosterGen()">產生輪休表</button>'+
     '<span class="spacer"></span><span class="hint">先選擇月份與工地,再按「產生」</span>';
@@ -1285,6 +1288,7 @@ function rSiteBox(j){
 }
 function renderRosterScreen(){
   var isLeave=(RSCREEN==='leave'); var j=ROSTER_DATA; var canEdit=isHR()&&j.canEdit;
+  rmSyncTitle();
   var tb=mstep()+rSiteBox(j);
   if(j.locked&&!canEdit) tb+='<span class="spacer"></span><span class="pill bad">🔒 本月已鎖定,變更請走「調休申請」</span>'+(isLeave?'':' <button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
   else if(canEdit){
