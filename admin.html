@@ -262,28 +262,26 @@
   .modal .acts{ display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
 
   /* 出勤表(照公司 A4 格式) */
-  .report{ background:#fff; color:#000; border:1px solid var(--line); border-radius:10px; padding:16px 22px; }
+  .report{ background:#fff; color:#000; border:none; border-radius:0; padding:0; }   /* 與列印一致 */
   .rpt-co{ text-align:center; font-size:16px; font-weight:700; letter-spacing:1px; }
   .rpt-ti{ text-align:center; font-size:18px; font-weight:800; margin:2px 0 10px; } .rpt-ti u{ padding:0 7px; }
   .rpt-meta{ display:flex; gap:44px; font-size:13px; margin:0 2px 8px; }
-  table.att{ width:100%; border-collapse:collapse; font-size:12px; }
-  .att th,.att td{ border:1px solid #333; padding:2px 4px; text-align:center; height:20px; color:#000; }
+  table.att{ width:100%; border-collapse:collapse; font-size:10.5px; }
+  .att th,.att td{ border:1px solid #333; padding:1px 3px; text-align:center; height:auto; color:#000; }
   .att thead th{ background:#f0f0f0; font-weight:700; }
   .att .sub{ font-size:9px; font-weight:400; color:#555; }
   .att td.dt{ white-space:nowrap; font-size:11px; }
   .att tr.lvrow td,.att td.lv{ background:#e6e6e6; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .report.editing td.ec{ background:#fffdf4; cursor:text; }
   .report.editing td.ec:focus{ background:#fff7d6; outline:2px solid var(--brand); }
-  .rpt-notes{ font-size:9.5px; color:#333; margin-top:8px; line-height:1.5; } .rpt-notes p{ margin:2px 0; }
-  .a4{ width:210mm; min-height:297mm; margin:0 auto 18px; background:#fff; padding:12mm 10mm; box-shadow:0 2px 14px rgba(20,30,50,.14); box-sizing:border-box; }
+  .rpt-notes{ font-size:8.5px; color:#333; margin-top:8px; line-height:1.55; }
+  .rpt-notes p{ margin:2px 0; padding-left:3.4em; text-indent:-3.4em; }   /* 折行對齊「註N：」之後 */
+  .a4{ width:210mm; min-height:297mm; margin:0 auto 18px; background:#fff; padding:8mm; box-shadow:0 2px 14px rgba(20,30,50,.14); box-sizing:border-box; }   /* 與 @page margin 相同 */
   .a4+.a4{ page-break-before:always; }
   @media(max-width:1000px){ .a4{ width:100%; min-height:0; padding:14px; transform:none; } }
   @media print{ .a4{ width:auto; min-height:0; margin:0; padding:0; box-shadow:none; } }
   .rpt-sign{ display:flex; justify-content:space-between; gap:10px; margin-top:18px; font-size:12px; flex-wrap:wrap; color:#000; }
-  @media print{
-    .report{ border:none; padding:0; } table.att{ font-size:10.5px; } .att th,.att td{ height:auto; padding:1px 3px; }
-    .rpt-notes{ font-size:8.5px; } @page{ size:A4 portrait; margin:8mm; }
-  }
+  @media print{ @page{ size:A4 portrait; margin:8mm; } }   /* 尺寸已與螢幕共用,這裡只設紙張 */
   /* 調休申請(參考圖版面) */
   .tfsteps{ display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink); font-weight:700; justify-content:flex-end; }
   .tfsteps .st{ display:flex; align-items:center; gap:7px; white-space:nowrap; }
@@ -1365,8 +1363,8 @@ function reportHtml(j,ed){
   });
   h+='</tbody></table></div>'+
     '<div class="rpt-notes">'+
-      '<p>註1：公司正常工作時間為每日8小時，午休時間為12:00至13:00，午休期間不計入工作時間。<br>　　　員工得於7:30至8:30間上班，並應依實際上班時間完成每日8小時工作。例如8:10上班者，正常下班時間為17:10。</p>'+
-      '<p>註2：提早或延後打卡，系統得標示為異常紀錄。提早到場或延後離場，並不當然視為加班；但員工如有實際提供工作，仍應據實申報並由公司依法認定及處理。<br>　　　員工完成當日工作後應即辦理下班打卡。未經核准不得於下班後繼續處理工作。單純留在工地、休息、聊天、等候交通工具或處理私人事務，不列入工作時間。</p>'+
+      '<p>註1：公司正常工作時間為每日8小時，午休時間為12:00至13:00，午休期間不計入工作時間。<br>員工得於7:30至8:30間上班，並應依實際上班時間完成每日8小時工作。例如8:10上班者，正常下班時間為17:10。</p>'+
+      '<p>註2：提早或延後打卡，系統得標示為異常紀錄。提早到場或延後離場，並不當然視為加班；但員工如有實際提供工作，仍應據實申報並由公司依法認定及處理。<br>員工完成當日工作後應即辦理下班打卡。未經核准不得於下班後繼續處理工作。單純留在工地、休息、聊天、等候交通工具或處理私人事務，不列入工作時間。</p>'+
       '<p>註3：因工作需要加班者，原則上應事先提出申請並經主管核准，且應記錄加班開始及結束時間。遇有緊急工作無法事先申請者，應於次一工作日補辦申請。</p>'+
       '<p>註4：本人簽名表示已核對本月份出勤、休假及加班紀錄；如有錯誤或遺漏，應於發現後向主管或人事提出更正申請。</p>'+
     '</div>'+
