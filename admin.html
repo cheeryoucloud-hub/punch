@@ -614,9 +614,44 @@ function scRemind(){
   $('main').innerHTML=pageTop('LINE 提醒',!isHR())+
     '<div class="panel" style="padding:14px 16px"><b style="font-size:14px">每日固定時間,自動以 LINE 卡片提醒指定對象</b>'+
     '<div class="hint" style="margin-top:6px">系統每 5 分鐘檢查一次,到點後 5 分鐘內發送;同一筆每天只發一次。未綁定 LINE 的員工不會收到。</div></div>'+
+    '<div id="rmdQuota"></div>'+
     '<div class="toolbar">'+(isHR()?'<button class="add" onclick="editRemind(null)">＋ 新增提醒</button>':'<span class="hint">僅人資／管理員可設定</span>')+'</div>'+
     '<div class="panel"><div class="tblwrap" id="rmdBody"><div class="spin">載入中…</div></div></div>';
-  loadRemind();
+  loadRemind(); loadQuota();
+}
+function loadQuota(){
+  api('admin_lineSettings',{}).then(function(j){
+    var box=$('rmdQuota'); if(!box||!j.ok)return;
+    var pct=j.cap?Math.min(100,Math.round(j.used/j.cap*100)):0;
+    var col=pct>=90?'var(--danger)':(pct>=70?'var(--amber)':'var(--brand)');
+    box.innerHTML='<div class="panel" style="padding:14px 16px">'+
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
+        '<b style="font-size:14px">本月 LINE 推播用量</b>'+
+        '<b style="font-size:20px;color:'+col+'">'+j.used+'</b><span class="hint">/ '+j.cap+' 則（'+esc(j.month)+'）</span>'+
+        '<span class="pill '+(pct>=90?'bad':(pct>=70?'wait':'ok'))+'">剩 '+j.left+' 則</span>'+
+        '<span class="spacer"></span>'+
+        (j.canEdit?'<button class="btn sm" onclick="editLineSet('+j.cap+')">⚙ 設定群組／上限</button>':'')+
+      '</div>'+
+      '<div style="height:8px;background:var(--surface-2);border-radius:5px;overflow:hidden;margin-top:9px">'+
+        '<div style="height:100%;width:'+pct+'%;background:'+col+'"></div></div>'+
+      '<div class="hint" style="margin-top:7px">'+
+        (j.group?('已設主管群組 ✅ 異常／申請通知只發群組一則（省額度）'):('⚠️ 未設主管群組：異常／申請通知會逐一私訊負責人與主管,較耗額度'))+
+        '　免費方案每月 200 則,超過會直接發送失敗（不會補發）。</div>'+
+      '</div>';
+  });
+}
+function editLineSet(cap){
+  api('admin_lineSettings',{}).then(function(j){
+    modal('LINE 設定',
+      '<div class="field"><label>主管通知群組 ID（留空＝逐一私訊）</label><input id="lsGroup" value="'+esc(j.group||'')+'" placeholder="Cxxxxxxxxxxxxxxxx"><div class="hint" style="margin-top:4px">填了之後,打卡異常／外勤／補打／調休通知只會發到群組一則,可省下大量額度。</div></div>'+
+      '<div class="field"><label>每月額度上限（免費方案 200）</label><input id="lsCap" type="number" value="'+(j.cap||200)+'"></div>',
+      function(){
+        busyOn('儲存中…');
+        api('admin_lineSettings',{set:true,group:$('lsGroup').value,cap:$('lsCap').value}).then(function(r){
+          busyOff(); if(!r.ok){ toast(r.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存'); loadQuota();
+        });
+      });
+  });
 }
 function loadRemind(){
   if(!state.rmdEmps) api('admin_empList',{}).then(function(e){ if(e.ok) state.rmdEmps=e.list; });
