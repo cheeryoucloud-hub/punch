@@ -1357,10 +1357,11 @@ function openPeriodBar(){
   var chips=ops.map(function(o){
     var here=(o.year===cy&&o.month===cm);
     return '<span class="pill '+(here?'ok':'wait')+'" style="cursor:'+(here?'default':'pointer')+'"'+
-      (here?'':(' onclick="goPeriod('+o.year+','+o.month+')" title="切換到這個期別"'))+'>'+
-      o.rocYear+'年'+o.month+'月'+(o.lock?'（已鎖定）':'')+(here?' · 目前顯示中':'')+'</span>';
+      (here?'':(' onclick="goPeriod('+o.year+','+o.month+')" title="這個月也是開放登錄狀態,點一下切換過去查看"'))+'>'+
+      o.rocYear+'年'+o.month+'月'+(o.lock?'（已鎖定）':'')+(here?' · 目前顯示中':' · 也開放中')+'</span>';
   }).join(' ');
-  return '<span class="hint" style="margin-left:6px">目前登錄期別：</span>'+chips;
+  var multi=(ops.length>1)?'<span class="hint" style="margin-left:6px;color:var(--amber)">（有 '+ops.length+' 個期別同時開放,建議只留一個）</span>':'';
+  return '<span class="hint" style="margin-left:6px">目前登錄期別：</span>'+chips+multi;
 }
 function goPeriod(y,m){
   if(Object.keys(ROSTER_CHANGES).length||Object.keys(SPECIAL_CHANGES).length||Object.keys(NOTE_CHANGES).length){
