@@ -106,6 +106,8 @@
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   @media(max-width:760px){ .grid2{ grid-template-columns:1fr; } }
   .chiplist{ display:flex; flex-direction:column; gap:8px; }
+  .chiplist.two{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  @media(max-width:560px){ .chiplist.two{ grid-template-columns:1fr; } }
   .lrow{ display:flex; align-items:center; justify-content:space-between; padding:9px 12px; background:var(--surface-2); border-radius:10px; font-size:13px; }
   .sitegrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:13px; }
   .sitecard{ border:1px solid var(--line); border-radius:14px; padding:13px 14px; }
@@ -113,9 +115,11 @@
   .sitecard .sh i{ width:8px; height:8px; border-radius:50%; background:var(--brand); display:inline-block; }
   .sitecard .sh .c{ margin-left:auto; font-size:11.5px; color:var(--muted); font-weight:700; }
   .mini{ width:100%; border-collapse:collapse; font-size:12.5px; }
-  .mini th{ font-size:11px; color:var(--muted); font-weight:600; text-align:left; padding:3px 4px; }
-  .mini td{ padding:4px 4px; border-top:1px solid var(--line); }
-  .mini td.tnum{ text-align:right; } .mini .lv{ color:var(--brand-ink); font-weight:700; }
+  .mini th{ font-size:11px; color:var(--muted); font-weight:600; text-align:center; padding:3px 4px; }
+  .mini th:first-child{ text-align:left; }
+  .mini td{ padding:4px 4px; border-top:1px solid var(--line); text-align:center; }
+  .mini td:first-child{ text-align:left; white-space:nowrap; }
+  .mini td.tnum{ text-align:center; } .mini .lv{ color:var(--brand-ink); font-weight:700; }
 
   table.tbl{ width:100%; border-collapse:collapse; font-size:13px; }
   .tbl th,.tbl td{ text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
@@ -506,14 +510,16 @@ function loadOverview(){
         g.people.forEach(function(pp){ if(pp.leave){ var la=pp.leaveAM||'', lp=pp.leavePM||'';
           if(!la&&!lp){ la=pp.leave; lp=pp.leave; }
           h+='<tr><td>'+esc(pp.name)+'</td><td class="lv">'+esc(la||'—')+'</td><td class="lv">'+esc(lp||'—')+'</td></tr>'; return; }
-          h+='<tr><td>'+esc(pp.name)+'</td><td class="tnum">'+esc(pp.in||'—')+'</td><td class="tnum">'+esc(pp.out||'—')+'</td></tr>'; });
+          var ci=pp.in?(esc(pp.in)+(pp.inPending?'<span class="pill wait" style="font-size:9.5px;margin-left:3px">待核准</span>':'')):'—';
+          var co=pp.out?(esc(pp.out)+(pp.outPending?'<span class="pill wait" style="font-size:9.5px;margin-left:3px">待核准</span>':'')):'—';
+          h+='<tr><td>'+esc(pp.name)+'</td><td class="tnum">'+ci+'</td><td class="tnum">'+co+'</td></tr>'; });
         h+='</table></div>';
       });
       h+='</div></div>';
       h+='<div class="grid2"><div class="panel"><h2>尚未打卡 <span class="count">'+notIn.length+'</span></h2>'+
-        (notIn.length?'<div class="chiplist">'+notIn.map(function(x){return '<div class="lrow"><b>'+esc(x.n)+'</b><span class="muted">'+esc(x.s)+'</span></div>';}).join('')+'</div>':'<div class="empty" style="padding:16px 0">全部完成上班打卡 🎉</div>')+'</div>'+
+        (notIn.length?'<div class="chiplist two">'+notIn.map(function(x){return '<div class="lrow"><b>'+esc(x.n)+'</b><span class="muted">'+esc(x.s)+'</span></div>';}).join('')+'</div>':'<div class="empty" style="padding:16px 0">全部完成上班打卡 🎉</div>')+'</div>'+
         '<div class="panel"><h2>休假 <span class="count grn">'+onLeave.length+'</span></h2>'+
-        (onLeave.length?'<div class="chiplist">'+onLeave.map(function(x){return '<div class="lrow"><b>'+esc(x.n)+' <span class="muted" style="font-weight:600">'+esc(x.s)+'</span></b><span class="pill ok">'+esc(x.lv)+'</span></div>';}).join('')+'</div>':'<div class="empty" style="padding:16px 0">今日無人休假</div>')+'</div></div>';
+        (onLeave.length?'<div class="chiplist two">'+onLeave.map(function(x){return '<div class="lrow"><b>'+esc(x.n)+' <span class="muted" style="font-weight:600">'+esc(x.s)+'</span></b><span class="pill ok">'+esc(x.lv)+'</span></div>';}).join('')+'</div>':'<div class="empty" style="padding:16px 0">今日無人休假</div>')+'</div></div>';
     }
     $('ovBody').innerHTML=h;
   });
@@ -1270,10 +1276,22 @@ function saveReport(){
   var emp=$('rpEmp').value; if(!emp){ alert('請先選員工'); return; }
   var rows=Object.keys(RPTCHG).map(function(k){return RPTCHG[k];}); if(!rows.length){ alert('沒有變更'); return; }
   rows.forEach(function(rw){ if(rw.leave)return; ['in','out','otS','otE','status','note'].forEach(function(f){ if(rw[f]===undefined){ var td=document.querySelector('.att td[data-day="'+rw.day+'"][data-f="'+f+'"]'); if(td)rw[f]=td.textContent.trim(); } }); });
+  modal('儲存出勤表修正',
+    '<div class="field"><label>修改原因（必填）</label><input id="rpReason" placeholder="例：漏打卡經主管確認補登、系統異常更正"></div>'+
+    '<div class="hint">出勤紀錄依法須據實記載。系統會一併記錄<b>操作人、修改前原值、修改時間</b>以備查。</div>',
+    function(){
+      var reason=($('rpReason').value||'').trim();
+      if(!reason){ toast('請填寫修改原因',true); return; }
+      closeModal(); doSaveReport(emp,rows,reason);
+    });
+}
+function doSaveReport(emp,rows,reason){
   var btn=$('rpSave'); if(btn){btn.disabled=true;btn.textContent='儲存中…';}
-  api('admin_saveReport',{empId:emp,year:yy(),month:mm(),rows:rows}).then(function(j){
-    if(btn){btn.disabled=false;btn.textContent='儲存修正';}
-    if(!j.ok){ alert(j.msg||'儲存失敗'); return; } alert('已儲存修正'); RPTCHG={}; RPT_EDIT=false; loadReport();
+  busyOn('儲存中…');
+  api('admin_saveReport',{empId:emp,year:yy(),month:mm(),rows:rows,reason:reason}).then(function(j){
+    busyOff(); if(btn){btn.disabled=false;btn.textContent='儲存修正';}
+    if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
+    toast('已儲存 '+rows.length+' 天'); RPTCHG={}; RPT_EDIT=false; loadReport();
   });
 }
 

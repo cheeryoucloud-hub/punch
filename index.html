@@ -171,8 +171,17 @@
     <label class="lbl" id="noteLbl">備註（選填）</label>
     <input id="note" class="fld" placeholder="例：交通延誤，遲到 10 分">
     <div id="lateWrap" style="display:none">
-      <label class="lbl">晚退原因（17:30 後未加班必填）</label>
-      <select id="lateReason" class="fld"><option value="">請選擇原因…</option><option>等候交通</option><option>私人事務</option><option>於工務所休息</option></select>
+      <label class="lbl">晚退原因（17:30 後必填）</label>
+      <select id="lateReason" class="fld" onchange="onLateReason()">
+        <option value="">請選擇原因…</option>
+        <option value="仍在工作">仍在工作（需申請加班）</option>
+        <option>等候交通</option>
+        <option>私人事務</option>
+        <option>於工務所休息</option>
+      </select>
+      <div id="lateWork" class="miniwarn" style="display:none">
+        ⚠️ 你選擇「仍在工作」。依法實際工作時間應計入加班,請按下方「<b>加班開始／加班結束</b>」完成加班打卡,不要直接打下班卡。
+      </div>
     </div>
     <div class="punchbtns">
       <button class="pbtn in" id="btnIn" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M3 12h11"/><path d="M9 8l4 4-4 4"/></svg></span>上班</button>
@@ -193,7 +202,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-30-new-06";
+  var APP_VERSION = "2026-08-31-law-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -338,6 +347,10 @@
 
   /* ===== 打卡 ===== */
   function nowHM() { var n = new Date(); return ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2); }
+  function onLateReason() {
+    var w = document.getElementById('lateWork'), lr = document.getElementById('lateReason');
+    if (w && lr) w.style.display = (lr.value === '仍在工作') ? 'block' : 'none';
+  }
   function refreshTimeState() {
     var warn = document.getElementById('timeWarn'); if (!warn) return;
     var lw = document.getElementById('lateWrap'), nl = document.getElementById('noteLbl'), t = nowHM();
@@ -346,6 +359,7 @@
     else if (late) { warn.style.display = 'block'; warn.textContent = '🌙 非正常下班時間。已申請加班請打「加班結束」;未申請加班請選晚退原因並完成下班打卡。'; }
     else { warn.style.display = 'none'; }
     if (lw) lw.style.display = late ? 'block' : 'none';
+    if (!late) { var lw2 = document.getElementById('lateWork'); if (lw2) lw2.style.display = 'none'; }
     if (nl) nl.textContent = early ? '備註（早到必填）' : '備註（選填）';
   }
   function startClock() {
@@ -436,7 +450,11 @@
     if (type === '上班' && t < '07:30' && !note) { alert('非正常上班時間（早到）,請於「備註」說明原因'); var ne = document.getElementById('note'); if (ne) ne.focus(); return; }
     if (type === '下班' && t > '17:30') {
       var lr = document.getElementById('lateReason'); var v = lr ? lr.value : '';
-      if (!v) { alert('非正常下班時間,請先選擇「晚退原因」;若有加班請改打「加班結束」'); return; }
+      if (!v) { alert('非正常下班時間,請先選擇「晚退原因」'); return; }
+      if (v === '仍在工作') {
+        alert('你選擇「仍在工作」。\n\n實際工作時間依法應計入加班,請改按「加班開始／加班結束」完成加班打卡。\n若已結束加班,請先打「加班結束」再打下班卡。');
+        return;
+      }
       note = note ? (v + '；' + note) : v;
     }
     var site = '', siteName = '';
@@ -800,8 +818,8 @@
     if (!m) return '<div class="muted">—</div>';
     if (m.leave) return '<div class="myleave"><small>今日</small>' + esc(m.leave) + '</div>';
     return '<div class="myday">' +
-      '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
-      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班</span><b>' + esc(m.out || '未打卡') + '</b></div>' +
+      '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班' + (m.inPending ? '（待核准）' : '') + '</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
+      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班' + (m.outPending ? '（待核准）' : '') + '</span><b>' + esc(m.out || '未打卡') + '</b></div>' +
       '</div>';
   }
   function ovActions(kind, id, canAct) {
@@ -852,7 +870,9 @@
         g.people.forEach(function (pp) {
           if (pp.leave) { html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">' + esc(pp.leave) + '</td></tr>'; return; }
           var miss = pp.in ? '' : ' class="miss"';
-          html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td' + (pp.in ? '' : ' class="nopunch"') + '>' + esc(pp.in || '未打卡') + '</td><td' + (pp.out ? '' : ' class="nopunch"') + '>' + esc(pp.out || '未打卡') + '</td></tr>';
+          var ci = pp.in ? (esc(pp.in) + (pp.inPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
+          var co = pp.out ? (esc(pp.out) + (pp.outPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
+          html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td' + (pp.in ? '' : ' class="nopunch"') + '>' + ci + '</td><td' + (pp.out ? '' : ' class="nopunch"') + '>' + co + '</td></tr>';
         });
         html += '</table></div>';
       });
