@@ -163,6 +163,20 @@
   table.roster th.sumh,table.roster td.sumc{ border-left:3px solid #b9cdc6; }              /* 與日期欄拉開 */
   table.roster td.sumc.bad{ color:#c00000; background:#fdeaea; }
   table.roster td.rcell,table.roster td.sumc{ position:relative; }
+  /* 公告的員工端預覽（模擬 LINE 卡片樣式）*/
+  .ntcprev{ background:#F3F5F4; border:1px solid var(--line); border-radius:14px; padding:12px; max-height:56vh; overflow:auto; }
+  .np-card{ background:#fff; border:1px solid #E9EDEB; border-radius:14px; padding:12px 13px; margin-bottom:10px; }
+  .np-card:last-child{ margin-bottom:0; }
+  .np-card.top{ border-color:#F0D9A8; box-shadow:0 0 0 1px #F7E7C4 inset; }
+  .np-hd{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; }
+  .np-tag{ color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:7px; white-space:nowrap; }
+  .np-ti{ font-size:14.5px; font-weight:800; color:#1c2b26; line-height:1.45; }
+  .np-pin{ font-style:normal; font-size:10.5px; font-weight:800; color:#B7791F; background:#FDF3E0; border-radius:5px; padding:2px 6px; margin-left:6px; }
+  .np-new{ font-style:normal; font-size:10.5px; font-weight:800; color:#fff; background:#C0392B; border-radius:5px; padding:2px 6px; margin-left:6px; }
+  .np-dt{ font-size:11.5px; color:#8a938f; white-space:nowrap; }
+  .np-bd{ margin-top:9px; padding-top:9px; border-top:1px solid #E9EDEB; font-size:13px; line-height:1.8; color:#3b4a45; white-space:pre-wrap; }
+  .np-exp{ margin-top:8px; font-size:11.5px; color:#B7791F; }
+  .np-empty{ text-align:center; color:var(--muted); font-size:13px; padding:26px 0; }
   .mpwrap{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line); background:#e8eef0; max-width:100%; }
   .mplg{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:9px; font-size:12.5px; color:var(--ink); }
   .mplg .sw{ display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-3px; margin-right:5px; }
@@ -546,12 +560,12 @@ function loadOverview(){
 
 /* ===================== 公司公告（人資管理） ===================== */
 var NTC=null;
-var NTC_CAT_CLS={'一般公告':'mut','人事':'info','工安':'wait','活動':'ok','緊急':'bad'};
+var NTC_CAT_CLS={'重要公告':'bad','一般公告':'mut','活動公告':'ok','公司宣導':'info'};
 function scNotice(){
   $('main').innerHTML=pageTop('公司公告',!isHR())+
     '<div class="panel" style="padding:14px 16px"><b style="font-size:14px">發布給全體員工的公告</b>'+
     '<div class="hint" style="margin-top:6px">員工在 LINE 的「公司公告」看得到（需已完成綁定）。狀態為「草稿」的不會出現在員工端。</div></div>'+
-    '<div class="toolbar">'+(isHR()?'<button class="add" onclick="editNotice(null)">＋ 新增公告</button>':'<span class="hint">僅人資／管理員可編輯</span>')+'</div>'+
+    '<div class="toolbar">'+(isHR()?'<button class="add" onclick="editNotice(null)">＋ 新增公告</button>':'<span class="hint">僅人資／管理員可編輯</span>')+'<button class="btn" onclick="previewNotice()">👁 員工端預覽</button></div>'+
     '<div class="panel"><div class="tblwrap" id="ntcBody"><div class="spin">載入中…</div></div></div>';
   loadNotice();
 }
@@ -561,38 +575,65 @@ function loadNotice(){
     if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
     NTC=j;
     if(!j.items.length){ b.innerHTML='<div class="empty">尚未建立公告</div>'; return; }
-    var h='<table class="tbl"><thead><tr><th style="width:104px">發布日期</th><th style="width:92px">分類</th><th>標題／內容</th><th style="width:74px">置頂</th><th style="width:74px">狀態</th>'+
+    var h='<table class="tbl"><thead><tr><th style="width:104px">發布日期</th><th style="width:104px">到期日</th><th style="width:92px">分類</th><th>標題／內容</th><th style="width:74px">置頂</th><th style="width:80px">狀態</th>'+
       (j.canEdit?'<th class="r" style="width:120px">操作</th>':'')+'</tr></thead><tbody>';
     j.items.forEach(function(n,i){
       var body=String(n.body||'').replace(/\s+/g,' ');
-      h+='<tr'+(n.status==='草稿'?' style="opacity:.55"':'')+'>'+
+      h+='<tr'+((n.status==='草稿'||n.expired)?' style="opacity:.55"':'')+'>'+
         '<td class="tnum">'+esc(n.date||'—')+(n.isNew?' <span class="pill ok" style="font-size:10px">新</span>':'')+'</td>'+
+        '<td class="tnum">'+(n.exp?esc(n.exp):'<span class="hint">不過期</span>')+'</td>'+
         '<td><span class="pill '+(NTC_CAT_CLS[n.cat]||'mut')+'">'+esc(n.cat)+'</span></td>'+
         '<td><b>'+esc(n.title)+'</b><div class="hint" style="margin-top:3px">'+esc(body.length>60?body.substring(0,60)+'…':body)+'</div></td>'+
         '<td>'+(n.top?'<span class="pill wait">置頂</span>':'<span class="hint">—</span>')+'</td>'+
-        '<td>'+(n.status==='草稿'?'<span class="pill mut">草稿</span>':'<span class="pill ok">發布</span>')+'</td>'+
+        '<td>'+(n.expired?'<span class="pill bad">已過期</span>':(n.status==='草稿'?'<span class="pill mut">草稿</span>':'<span class="pill ok">發布</span>'))+'</td>'+
         (j.canEdit?('<td class="r"><div class="actions"><button class="btn sm" onclick="editNotice('+i+')">編輯</button><button class="btn rj sm" onclick="delNotice('+i+')">刪</button></div></td>'):'')+
         '</tr>';
     });
     b.innerHTML=h+'</tbody></table>';
   });
 }
+/* 以員工（LINE）的角度預覽目前看得到的公告 */
+var NTC_PREV_COLOR={'重要公告':'#C0392B','一般公告':'#6B7A72','活動公告':'#0E7C66','公司宣導':'#2F6BD8'};
+function previewNotice(){
+  var items=((NTC&&NTC.items)||[]).filter(function(n){ return n.status==='發布'; });
+  var h='<div class="ntcprev">';
+  if(!items.length){
+    h+='<div class="np-empty">目前沒有任何公告會出現在員工端<div class="hint" style="margin-top:6px">草稿與已過期的公告不會顯示</div></div>';
+  } else {
+    items.forEach(function(n,i){
+      var col=NTC_PREV_COLOR[n.cat]||'#6B7A72';
+      h+='<div class="np-card'+(n.top?' top':'')+'">'+
+        '<div class="np-hd"><span class="np-tag" style="background:'+col+'">'+esc(n.cat)+'</span>'+
+        '<span class="np-ti">'+esc(n.title)+
+          (n.top?'<i class="np-pin">置頂</i>':'')+(n.isNew?'<i class="np-new">NEW</i>':'')+'</span>'+
+        '<span class="np-dt">'+esc(n.date)+'</span></div>'+
+        '<div class="np-bd">'+esc(n.body||'（無內容）')+'</div>'+
+        (n.exp?('<div class="np-exp">此公告於 '+esc(n.exp)+' 之後自動下架</div>'):'')+
+      '</div>';
+    });
+  }
+  h+='</div>';
+  modal('員工端預覽 · 公司公告',
+    '<div class="hint" style="margin-bottom:10px">這是員工在 LINE「公司公告」看到的內容與順序（置頂在前，已過期與草稿不出現）。共 <b>'+items.length+'</b> 則。</div>'+h,
+    function(){ closeModal(); });
+}
 function editNotice(i){
-  var n=(i===null||i===undefined)?{row:0,date:todayStr(),title:'',body:'',cat:'一般公告',top:false,status:'發布',memo:''}:NTC.items[i];
+  var n=(i===null||i===undefined)?{row:0,date:todayStr(),exp:'',title:'',body:'',cat:'一般公告',top:false,status:'發布',memo:''}:NTC.items[i];
   var cats=(NTC&&NTC.cats)||['一般公告'];
   modal((n.row?'編輯':'新增')+'公告',
     '<div class="row2"><div class="field"><label>發布日期</label><input id="nDate" type="date" value="'+esc((n.date||'').replace(/\//g,'-'))+'"></div>'+
-    '<div class="field"><label>分類</label><select id="nCat">'+cats.map(function(c){return '<option'+(c===n.cat?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select></div></div>'+
+    '<div class="field"><label>到期日（留空＝不過期）</label><input id="nExp" type="date" value="'+esc((n.exp||'').replace(/\//g,'-'))+'"></div></div>'+
+    '<div class="field"><label>分類</label><select id="nCat">'+cats.map(function(c){return '<option'+(c===n.cat?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select></div>'+
     '<div class="field"><label>標題</label><input id="nTitle" value="'+esc(n.title)+'" placeholder="例：9月份工安月會時間異動"></div>'+
     '<div class="field"><label>內容</label><textarea id="nBody" rows="7" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13.5px;background:var(--surface-2);color:var(--ink)">'+esc(n.body)+'</textarea></div>'+
     '<div class="row2"><div class="field"><label>置頂</label><select id="nTop"><option value="0"'+(n.top?'':' selected')+'>否</option><option value="1"'+(n.top?' selected':'')+'>是（排在最前面）</option></select></div>'+
     '<div class="field"><label>狀態</label><select id="nStatus"><option'+(n.status==='草稿'?'':' selected')+'>發布</option><option'+(n.status==='草稿'?' selected':'')+'>草稿</option></select></div></div>'+
-    '<div class="hint">「草稿」只有後台看得到，員工端不會出現。</div>',
+    '<div class="hint">「草稿」只有後台看得到；到了<b>到期日的隔天</b>公告會自動下架，狀態顯示「已過期」。</div>',
     function(){
       var title=($('nTitle').value||'').trim();
       if(!title){ toast('請填寫標題',true); return; }
       busyOn('儲存中…');
-      api('admin_saveNotice',{row:n.row,date:($('nDate').value||'').replace(/-/g,'/'),title:title,
+      api('admin_saveNotice',{row:n.row,date:($('nDate').value||'').replace(/-/g,'/'),exp:($('nExp').value||'').replace(/-/g,'/'),title:title,
         body:$('nBody').value,cat:$('nCat').value,top:$('nTop').value==='1',status:$('nStatus').value}).then(function(j){
         busyOff(); if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
         closeModal(); toast('已儲存'); loadNotice();
