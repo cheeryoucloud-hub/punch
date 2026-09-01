@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>啓宇打卡系統 · 打卡頁時段模擬</title>
+<meta name="description" content="LINE 打卡頁在早到、一般、晚退三個時段的畫面與驗證規則模擬。">
+</head>
+<body>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* ── 外層說明面板（與手機畫面完全分開的樣式）─────────────────── */
+:root{
+  --c-shell:#E9EFEC; --c-panel:#FFFFFF; --c-line:#CFDCD7; --c-ink:#17231F;
+  --c-muted:#657B73; --c-accent:#0E7C66; --c-amber:#B9760F; --c-chip:#DCE9E4;
+  --c-code:#F2F6F4; --c-shadow:rgba(20,45,38,.13);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --c-shell:#0E1714; --c-panel:#16211D; --c-line:#25332E; --c-ink:#E6EFEB;
+    --c-muted:#8CA298; --c-accent:#4FBFA2; --c-amber:#E0A64A; --c-chip:#1E2C27;
+    --c-code:#111A17; --c-shadow:rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"]{
+  --c-shell:#0E1714; --c-panel:#16211D; --c-line:#25332E; --c-ink:#E6EFEB;
+  --c-muted:#8CA298; --c-accent:#4FBFA2; --c-amber:#E0A64A; --c-chip:#1E2C27;
+  --c-code:#111A17; --c-shadow:rgba(0,0,0,.45);
+}
+body{
+  margin:0; background:var(--c-shell); color:var(--c-ink);
+  font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.page{ max-width:1180px; margin:0 auto; padding:34px 22px 56px; }
+.head{ margin-bottom:26px; }
+.eyebrow{ font-size:12px; font-weight:700; letter-spacing:.16em; color:var(--c-accent); margin:0 0 7px; }
+.head h1{ font-size:30px; font-weight:900; margin:0 0 8px; letter-spacing:-.01em; text-wrap:balance; }
+.head p{ margin:0; font-size:15px; line-height:1.7; color:var(--c-muted); max-width:62ch; }
+.cols{ display:grid; grid-template-columns:420px minmax(0,1fr); gap:30px; align-items:start; }
+@media (max-width:900px){ .cols{ grid-template-columns:minmax(0,1fr); } }
+
+/* 時段切換：三段就是三個真正的規則區間 */
+.regimes{ display:flex; gap:0; border:1px solid var(--c-line); border-radius:12px; overflow:hidden; background:var(--c-panel); }
+.regimes button{
+  flex:1; border:0; background:transparent; color:var(--c-muted); cursor:pointer;
+  font-family:inherit; font-size:13px; font-weight:700; padding:11px 6px; line-height:1.35;
+  border-right:1px solid var(--c-line); transition:background .15s,color .15s;
+}
+.regimes button:last-child{ border-right:0; }
+.regimes button span{ display:block; font-size:11px; font-weight:500; color:var(--c-muted); margin-top:2px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace; }
+.regimes button:hover{ background:var(--c-chip); }
+.regimes button[aria-pressed="true"]{ background:var(--c-accent); color:#fff; }
+.regimes button[aria-pressed="true"] span{ color:rgba(255,255,255,.82); }
+.regimes button:focus-visible{ outline:2px solid var(--c-accent); outline-offset:-2px; }
+
+/* 手機外框 */
+.device{ background:var(--c-panel); border:1px solid var(--c-line); border-radius:26px; padding:12px;
+  box-shadow:0 18px 40px var(--c-shadow); }
+#phone{ width:100%; border-radius:16px; overflow:hidden; background:#F3F5F4; }
+#phone .wrap{ max-width:none; padding:12px 14px 20px; }
+
+.panel{ background:var(--c-panel); border:1px solid var(--c-line); border-radius:16px; padding:20px 22px; }
+.panel + .panel{ margin-top:18px; }
+.panel h2{ font-size:14px; font-weight:900; margin:0 0 4px; letter-spacing:.02em; }
+.panel .cap{ font-size:12.5px; color:var(--c-muted); margin:0 0 14px; line-height:1.6; }
+.stack{ display:flex; flex-direction:column; gap:12px; }
+
+.state{ display:flex; flex-direction:column; gap:9px; }
+.srow{ display:flex; align-items:baseline; gap:10px; font-size:13.5px; }
+.srow b{ flex:0 0 96px; font-weight:500; color:var(--c-muted); }
+.pill{ font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:999px; border:1px solid var(--c-line); }
+.pill.on{ background:var(--c-chip); color:var(--c-accent); border-color:transparent; }
+.pill.off{ color:var(--c-muted); }
+
+.record{ background:var(--c-code); border:1px solid var(--c-line); border-radius:12px; padding:14px 16px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12.5px; line-height:1.95;
+  overflow-x:auto; font-variant-numeric:tabular-nums; }
+.record .k{ color:var(--c-muted); }
+.record .v{ color:var(--c-ink); }
+.record .hl{ color:var(--c-amber); font-weight:500; }
+.record .empty{ color:var(--c-muted); font-style:italic; }
+
+.rules{ margin:0; padding-left:1.15em; font-size:13.5px; line-height:1.85; color:var(--c-ink); }
+.rules li{ margin-bottom:5px; }
+.rules code{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12px; background:var(--c-code);
+  padding:1px 5px; border-radius:5px; }
+.foot{ margin-top:26px; font-size:12.5px; color:var(--c-muted); line-height:1.7; }
+@media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+/* ── 以下為 web/index.html 的原樣式，已全部限定在 #phone 之內 ── */
+#phone{
+    --teal:#0E7C66; --teal-d:#0A5E4C; --teal-soft:#E4F1EC;
+    --amber:#E29A2E; --ink:#1c2b26; --muted:#8a938f; --line:#E9EDEB; --bg:#F3F5F4; --card:#fff;
+  }
+#phone *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+#phone{ margin:0; font-family:"PingFang TC","Microsoft JhengHei",system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+#phone .wrap{ max-width:480px; margin:0 auto; padding:14px 16px 84px; }
+#phone .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
+#phone h1{ font-size:20px; margin:0 0 4px; font-weight:800; }
+#phone h2{ font-size:15px; margin:18px 0 9px; font-weight:800; }
+#phone h3{ font-size:13px; margin:0; font-weight:800; }
+#phone .sub{ color:var(--muted); font-size:13px; margin-bottom:8px; }
+#phone .muted{ color:var(--muted); font-size:12.5px; }
+#phone .date{ color:var(--muted); font-size:13px; margin-bottom:6px; }
+#phone label{ font-size:13px; color:#374151; display:block; margin:12px 0 6px; }
+#phone .lbl{ font-size:12px; color:var(--muted); font-weight:700; margin:14px 2px 6px; display:block; }
+#phone select, #phone input, #phone textarea, #phone .fld{ width:100%; border:1px solid var(--line); border-radius:13px; padding:12px 14px;
+    font-size:15px; font-family:inherit; background:#fff; color:var(--ink); }
+#phone select.fld, #phone select{ height:48px; }
+#phone .two{ display:flex; gap:10px; }
+#phone .two>div{ flex:1; }
+#phone .mini{ font-size:12px; color:var(--muted); font-weight:700; display:block; margin-bottom:4px; }
+#phone /* punch hero */
+  .hero{ background:linear-gradient(150deg,var(--teal),var(--teal-d)); color:#fff; border-radius:20px; padding:15px 18px;
+    position:relative; overflow:hidden; }
+#phone .hero:after{ content:""; position:absolute; right:-40px; top:-46px; width:140px; height:140px; background:rgba(255,255,255,.09); border-radius:50%; }
+#phone .hero-top{ display:flex; align-items:center; justify-content:space-between; }
+#phone .greet{ font-size:13px; opacity:.94; }
+#phone .clock{ font-size:30px; font-weight:800; letter-spacing:1px; }
+#phone .hero-date{ font-size:11.5px; opacity:.82; margin-top:3px; }
+#phone .pbody{ padding-top:2px; }
+#phone .gps{ margin-top:10px; display:flex; align-items:center; gap:8px; background:#f3f4f6; color:#4b5563;
+    border-radius:12px; padding:10px 13px; font-size:13px; font-weight:700; }
+#phone .gps.ok{ background:var(--teal-soft); color:var(--teal-d); }
+#phone .gps.err{ background:#fdecea; color:#b91c1c; }
+#phone .gps .dot{ width:8px; height:8px; border-radius:50%; background:var(--teal); box-shadow:0 0 0 4px rgba(14,124,102,.18); }
+#phone .gpsrow{ display:flex; align-items:center; gap:8px; }
+#phone .gpsrow .gps{ flex:1; margin-top:10px; }
+#phone .reloc{ margin-top:10px; flex:0 0 auto; border:1px solid var(--line); background:#fff; color:var(--teal-d); border-radius:11px; padding:10px 12px; font-size:12.5px; font-weight:700; font-family:inherit; white-space:nowrap; }
+#phone .safari{ display:block; text-align:center; margin-top:10px; color:var(--teal-d); font-size:13.5px; font-weight:800; text-decoration:underline; }
+#phone .punchbtns{ display:flex; gap:12px; margin-top:16px; }
+#phone .pbtn{ flex:1; border:none; border-radius:16px; padding:16px 0; font-size:17px; font-weight:800; font-family:inherit;
+    display:flex; flex-direction:column; align-items:center; gap:5px; }
+#phone .pbtn .ico{ display:flex; }
+#phone .pbtn svg{ width:23px; height:23px; }
+#phone .pbtn.in{ background:var(--teal); color:#fff; box-shadow:0 9px 18px rgba(14,124,102,.26); }
+#phone .pbtn.out{ background:#fff; color:var(--amber); border:1.6px solid #F0D9AC; }
+#phone .pbtn:disabled{ opacity:.5; }
+#phone .otlbl{ display:flex; align-items:center; gap:8px; margin:18px 2px 0; font-size:12px; font-weight:800; color:var(--muted); }
+#phone .otlbl:before, #phone .otlbl:after{ content:""; flex:1; height:1px; background:var(--line); }
+#phone .othint{ margin:7px 2px 0; font-size:11.5px; line-height:1.55; color:var(--muted); text-align:center; }
+#phone .othint b{ color:var(--amber); }
+#phone .otbtns{ display:flex; gap:12px; margin-top:9px; }
+#phone .otbtn{ flex:1; border:1.4px solid #d7e4df; background:#F4F8F6; color:var(--teal-d); border-radius:14px; padding:13px 0;
+    font-size:15px; font-weight:800; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:6px; }
+#phone .otbtn svg{ width:19px; height:19px; }
+#phone .otbtn:disabled{ opacity:.5; }
+#phone .otbtn.end{ color:var(--amber); border-color:#F0D9AC; background:#FDF6EA; }
+#phone .primary{ width:100%; border:none; border-radius:13px; padding:15px 0; font-size:16px; font-weight:800; color:#fff;
+    background:var(--teal); font-family:inherit; margin-top:18px; box-shadow:0 8px 16px rgba(14,124,102,.20); }
+#phone .primary:disabled{ opacity:.5; }
+#phone .miniwarn{ font-size:12px; color:var(--teal-d); background:var(--teal-soft); border-radius:11px; padding:9px 12px; margin-top:10px; font-weight:600; }
+#phone .btns{ display:flex; gap:12px; margin-top:16px; }
+#phone .btns button{ flex:1; border:none; border-radius:13px; padding:15px 0; font-size:16px; font-weight:800; color:#fff; font-family:inherit; }
+#phone .btns .in{ background:var(--teal); }
+#phone .result{ margin-top:14px; padding:13px; border-radius:12px; font-size:15px; text-align:center; display:none; }
+#phone .result.show{ display:block; }
+#phone .result.good{ background:var(--teal-soft); color:var(--teal-d); }
+#phone .result.bad{ background:#fdecea; color:#b91c1c; }
+#phone .uid{ font-family:monospace; font-size:12px; background:#f3f4f6; padding:8px; border-radius:6px; word-break:break-all; margin:8px 0; }
+#phone /* overview */
+  .datebar{ display:flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:6px; margin-bottom:14px; }
+#phone .datebar .dbtn{ border:none; background:var(--teal-soft); color:var(--teal-d); width:34px; height:34px; border-radius:9px; font-size:18px; font-weight:800; font-family:inherit; }
+#phone .datebar .dpick{ position:relative; flex:1; display:block; text-align:center; cursor:pointer; }
+#phone .datebar .dpick input[type=date]{ position:absolute; inset:0; width:100%; height:100%; opacity:0; border:0; cursor:pointer; }
+#phone .datebar .dcap{ font-weight:800; font-size:14.5px; }
+#phone .datebar .dtoday{ border:1px solid #cfe6dd; background:var(--teal-soft); color:var(--teal-d); border-radius:9px; padding:7px 12px; font-size:12.5px; font-weight:800; font-family:inherit; }
+#phone .myday-title{ font-size:12px; color:var(--muted); font-weight:800; margin-bottom:11px; }
+#phone .myday{ display:flex; gap:11px; }
+#phone .myday .cell{ flex:1; text-align:center; background:#F6F8F7; border:1px solid #eef2f1; border-radius:12px; padding:14px 6px; }
+#phone .myday .cell span{ display:block; font-size:12px; color:var(--muted); font-weight:700; margin-bottom:5px; }
+#phone .myday .cell b{ font-size:27px; font-weight:800; letter-spacing:1px; }
+#phone .myday .cell.miss b{ color:#CF5B4A; font-size:18px; }
+#phone .myleave{ text-align:center; background:#DCEFE7; border:1px solid #BEE2D4; border-radius:13px; padding:18px; font-weight:800; font-size:28px; color:var(--teal-d); letter-spacing:3px; }
+#phone .myleave small{ display:block; font-size:12px; font-weight:800; color:#0F8A63; letter-spacing:1px; margin-bottom:5px; }
+#phone .tag{ font-size:11px; font-weight:800; padding:3px 10px; border-radius:20px; }
+#phone .tag.ok{ background:var(--teal-soft); color:var(--teal-d); }
+#phone .tag.wait{ background:#FAEFD9; color:#8A5A0E; }
+#phone .tag.bad{ background:#FBE6E3; color:#A5382A; }
+#phone .arow{ background:#fff; border:1px solid var(--line); border-radius:13px; padding:11px 13px; margin-bottom:8px; }
+#phone .arow.pend{ border-left:3px solid var(--amber); }
+#phone .row{ display:flex; justify-content:space-between; align-items:center; }
+#phone .arow b{ font-size:14px; font-weight:800; }
+#phone .empty{ color:#b6c0bb; font-size:12.5px; padding:2px 2px 4px; }
+#phone .pbtns{ display:flex; gap:9px; margin-top:10px; }
+#phone .pbtns button{ flex:1; border:none; border-radius:10px; padding:9px 0; font-size:13.5px; font-weight:800; font-family:inherit; }
+#phone .pbtns .approve{ background:var(--teal); color:#fff; }
+#phone .pbtns .reject{ background:#fff; color:#A5382A; border:1.3px solid #EBC7C0; }
+#phone .pbtns button.off{ opacity:.4; }
+#phone .pbtns button:disabled{ cursor:default; }
+#phone .sp{ display:inline-block; width:13px; height:13px; margin-right:6px; vertical-align:-2px;
+       border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+#phone .pbtns .reject .sp{ border-color:rgba(165,56,42,.3); border-top-color:#A5382A; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+#phone #ovBusy{ position:fixed; inset:0; z-index:9998; display:none; align-items:center; justify-content:center; background:rgba(15,30,26,.42); }
+#phone #ovBusy .bx{ background:#fff; color:var(--ink); font-size:15px; font-weight:800; padding:16px 22px; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.22); display:flex; align-items:center; }
+#phone #ovBusy .sp{ border-color:rgba(14,124,102,.25); border-top-color:var(--teal); width:16px; height:16px; }
+#phone #ovToast{ position:fixed; left:50%; bottom:92px; transform:translateX(-50%) translateY(14px); z-index:9999;
+    background:#1f2d29; color:#fff; font-size:14px; font-weight:700; padding:11px 18px; border-radius:12px;
+    opacity:0; pointer-events:none; transition:opacity .18s, transform .18s; max-width:86vw; text-align:center; }
+#phone #ovToast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+#phone #ovToast.bad{ background:#A5382A; }
+#phone .refresh{ width:100%; border:1px solid var(--line); background:#fff; border-radius:12px; padding:12px; font-size:14px; font-family:inherit; margin-top:10px; color:var(--ink); }
+#phone #ovSiteFilter{ margin-bottom:10px; }
+#phone .sitegrp{ margin-bottom:10px; }
+#phone table.att{ width:100%; border-collapse:collapse; font-size:13px; background:#fff; border-radius:10px; overflow:hidden; }
+#phone table.att th, #phone table.att td{ border:1px solid #eef2f1; padding:7px 9px; text-align:center; }
+#phone table.att th{ background:#F4F8F6; color:var(--teal-d); }
+#phone table.att td.nm{ text-align:left; font-weight:700; }
+#phone table.att tr.miss td{ color:#CF5B4A; }
+#phone table.att td.nopunch{ color:#CF5B4A; font-weight:700; font-size:12px; }
+#phone /* schedule */
+  .hdr h1{ font-size:19px; }
+#phone .hdr p{ font-size:12px; color:var(--muted); margin:3px 0 0; }
+#phone .msel{ display:flex; align-items:center; justify-content:center; gap:14px; background:#fff; border:1px solid var(--line);
+    border-radius:12px; padding:7px; margin:12px 0 0; font-weight:800; font-size:15px; }
+#phone .msel .ar{ border:none; background:transparent; color:var(--teal); font-size:20px; font-weight:800; font-family:inherit; padding:0 12px; }
+#phone .cal{ margin-top:12px; background:#fff; border:1px solid var(--line); border-radius:14px; padding:8px 6px; }
+#phone .wk{ display:grid; grid-template-columns:repeat(7,1fr); text-align:center; font-size:11px; font-weight:800; color:var(--muted); padding:2px 0 6px; }
+#phone .wk .we{ color:#c2597c; }
+#phone .grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+#phone .cell{ min-height:50px; border-radius:9px; padding:4px 3px; position:relative; background:#fafbfa; overflow:hidden; }
+#phone .cell.wend{ background:#f1f4f3; }
+#phone .cell.empty{ background:transparent; }
+#phone .cell .n{ font-size:11px; font-weight:800; color:#3a4844; }
+#phone .cell.holi .n{ color:#D0452F; }
+#phone .cell .pts{ position:absolute; top:4px; right:4px; display:flex; gap:2px; }
+#phone .cell .pts i{ width:6px; height:6px; border-radius:50%; }
+#phone .cell .lv{ position:absolute; left:3px; right:3px; bottom:3px; text-align:center; font-size:11px; font-weight:800; }
+#phone .cell.has .n{ color:#fff; position:relative; z-index:1; }
+#phone .cell.has .lv{ color:#fff; }
+#phone .cell.f-rest{ background:var(--teal); }
+#phone .cell.f-year{ background:#2F7EA8; }
+#phone .cell.f-sick{ background:#C58A2A; }
+#phone .cell.f-perso{ background:#6A5AB0; }
+#phone .cell.f-other{ background:#7C8B85; }
+#phone .legend{ margin-top:12px; }
+#phone .lg-row{ display:flex; flex-wrap:wrap; gap:6px 10px; margin-bottom:7px; align-items:center; }
+#phone .lg-ttl{ font-size:10.5px; color:var(--muted); font-weight:800; }
+#phone .lg{ font-size:11px; font-weight:800; display:flex; align-items:center; gap:4px; color:#57655f; }
+#phone .lg .sw{ width:13px; height:13px; border-radius:4px; display:inline-block; }
+#phone .lg .pt{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+#phone .rnote{ margin-top:11px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
+#phone .rnote b{ display:block; font-size:12px; color:var(--brand); font-weight:800; margin-bottom:5px; }
+#phone .rnote p{ font-size:12px; color:var(--ink); line-height:1.62; white-space:pre-line; margin:0; }
+#phone .mpwrap{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line); background:#e8eef0; max-width:100%; }
+#phone .mplg{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--ink); }
+#phone .mplg .sw{ display:inline-block; width:13px; height:13px; border-radius:4px; background:rgba(14,124,102,.3); border:1.5px solid #0E7C66; vertical-align:-2px; margin-right:4px; }
+#phone .mplg .dot{ display:inline-block; width:11px; height:11px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #bbb; vertical-align:-1px; margin-right:4px; }
+#phone #mpModal{ position:fixed; inset:0; z-index:9997; display:none; align-items:center; justify-content:center; background:rgba(15,30,26,.5); padding:14px; }
+#phone #mpModal .bx{ background:#fff; border-radius:16px; padding:15px; max-width:94vw; max-height:92vh; overflow:auto; }
+#phone #mpModal .hd{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:5px; }
+#phone #mpModal .hd b{ font-size:16px; }
+#phone #mpModal .hd span{ font-size:12px; color:var(--muted); }
+#phone #mpModal .cls{ width:100%; margin-top:11px; border:none; border-radius:10px; padding:11px 0; font-size:14.5px; font-weight:800; font-family:inherit; background:var(--teal); color:#fff; }
+#phone .maplink{ display:inline-block; color:var(--brand); font-weight:800; font-size:12.5px; text-decoration:none; border:1px solid var(--brand); border-radius:8px; padding:5px 10px; }
+#phone .arow .warn{ color:#C0392B; font-weight:800; }
+#phone .snote{ margin-top:11px; font-size:11.5px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:11px; padding:9px 11px; line-height:1.5; }
+#phone .vas{ display:flex; align-items:center; gap:8px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:12px; padding:8px 10px; margin-bottom:12px; }
+#phone .vas b{ font-size:11.5px; color:#8A5A0E; font-weight:800; white-space:nowrap; }
+#phone .vas select{ flex:1; border:1px solid #EBD6A8; border-radius:9px; padding:8px 10px; font-size:13.5px; background:#fff; font-family:inherit; height:auto; }
+#phone .vas .rst{ border:1px solid #EBD6A8; background:#fff; color:#8A5A0E; border-radius:9px; padding:7px 10px; font-size:12px; font-weight:800; font-family:inherit; white-space:nowrap; }
+#phone /* bottom tab bar */
+  .tabbar{ position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); z-index:60; }
+#phone .tabinner{ max-width:480px; margin:0 auto; display:flex; height:62px; padding-bottom:4px; }
+#phone .tabbar .t{ flex:1; border:none; background:transparent; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    font-size:11px; color:#9aa8a2; font-weight:800; font-family:inherit; }
+#phone .tabbar .t.on{ color:var(--teal); }
+#phone .tabbar .t svg{ width:21px; height:21px; }
+</style>
+
+<div class="page">
+  <div class="head">
+    <p class="eyebrow">LINE 打卡頁 · 互動模擬</p>
+    <h1>打卡頁時段模擬器</h1>
+    <p>切換時段看畫面怎麼變，欄位可以真的填、按鈕可以真的按。驗證與擋下的規則跟正式版相同；右側會即時顯示這一筆送出後寫進試算表的內容。</p>
+  </div>
+
+  <div class="cols">
+    <div>
+      <div class="regimes" role="group" aria-label="切換時段">
+        <button type="button" data-t="07:05" aria-pressed="false">早到<span>&lt; 07:30</span></button>
+        <button type="button" data-t="13:30" aria-pressed="false">一般<span>07:30–17:30</span></button>
+        <button type="button" data-t="17:45" aria-pressed="true">晚退<span>&gt; 17:30</span></button>
+      </div>
+      <div class="device" style="margin-top:16px">
+        <div id="phone"><div class="wrap"><div id="scr"></div></div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>目前畫面狀態</h2>
+        <p class="cap">同一頁在不同時段會收起或展開不同欄位，避免員工看到用不到的東西。</p>
+        <div class="state" id="state"></div>
+      </div>
+
+      <div class="panel">
+        <h2>送出後寫進試算表</h2>
+        <p class="cap">按下方任一顆打卡鍵就會更新。<span class="hl" style="color:var(--c-amber);font-weight:700">橘色</span>是備註欄實際存入的內容。</p>
+        <div class="record" id="rec"><span class="empty">尚未打卡 — 按左側的「上班／下班／加班結束」試試</span></div>
+      </div>
+
+      <div class="panel">
+        <h2>會擋下來的情況</h2>
+        <ul class="rules">
+          <li><b>早到</b>（<code>&lt; 07:30</code>）按「上班」而備註空白 → 擋下，游標跳到備註</li>
+          <li><b>晚退</b>（<code>&gt; 17:30</code>）按「下班」而未選晚退原因 → 擋下</li>
+          <li>按「<b>加班結束</b>」而加班原因空白 → 擋下</li>
+          <li>打卡位置選「<b>其他（外勤）</b>」而備註空白 → 擋下（外勤時備註欄一律出現，即使已過 17:30）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">模擬環境：定位固定在旺來產業園區、日期固定 2026/09/01（星期二）、姓名固定胡興裕。真實系統的定位、綁定與送出都由 LINE 與 Google Apps Script 處理，這裡只重現畫面邏輯與驗證規則。</p>
+</div>
+
+<template id="punchTpl">
+  <div class="hero">
+    <div class="hero-top"><span class="greet" id="greet"></span><span class="clock" id="clock"></span></div>
+    <div class="hero-date" id="heroDate"></div>
+  </div>
+  <div class="pbody">
+    <div id="timeWarn" class="miniwarn" style="display:none"></div>
+    <label class="lbl">打卡位置</label>
+    <select id="siteSel" class="fld"><option>載入中…</option></select>
+    <div class="gpsrow"><div class="gps" id="gps">定位中…</div><button type="button" class="reloc" id="relocBtn">↻ 重新定位</button></div>
+    <a id="safariBtn" class="safari" style="display:none">↗ 定位一直失敗？改用 Safari 打卡</a>
+    <div id="noteWrap">
+      <label class="lbl" id="noteLbl">備註（選填）</label>
+      <input id="note" class="fld" placeholder="例：交通延誤，遲到 10 分">
+    </div>
+    <div id="lateWrap" style="display:none">
+      <label class="lbl">晚退原因（17:30 後打「下班」必選）</label>
+      <select id="lateSel" class="fld">
+        <option value="">請選擇原因…</option>
+        <option>交通等候</option>
+        <option>忘記打卡</option>
+        <option>其他（個人因素）</option>
+      </select>
+    </div>
+    <div id="lateWork" class="miniwarn" style="display:none">
+      ⚠️ 如有申請加班進行工作者<b>勿打下班卡</b>，工作結束時請按「<b>加班結束</b>」打卡，並請記得<b>申請加班</b>。
+    </div>
+    <div class="punchbtns">
+      <button class="pbtn in" id="btnIn" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M3 12h11"/><path d="M9 8l4 4-4 4"/></svg></span>上班</button>
+      <button class="pbtn out" id="btnOut" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"/><path d="M21 12H10"/><path d="M17 8l4 4-4 4"/></svg></span>下班</button>
+    </div>
+    <div class="otlbl">加班（於工地內按；「加班結束」會一併登記下班）</div>
+    <label class="lbl" style="margin-top:8px">加班原因（打「加班結束」必填）</label>
+    <input id="otNote" class="fld" placeholder="例：配合灌漿作業加班">
+    <div class="othint">加班請記得於 <b>ACM 系統</b>提出申請。</div>
+    <div class="otbtns">
+      <button class="otbtn end" id="btnOtOut" disabled><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M8 3l2 2"/></svg>加班結束</button>
+    </div>
+    <div class="result" id="result"></div>
+  </div>
+</template>
+
+<script>
+(function () {
+  var NOW = '17:45';
+  var LAST = null;
+  var SITES = [{ name: '旺來產業園區', d: 97 }, { name: '啓宇營造總部', d: 4120 }];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  function isField() { var s = $('siteSel'); return !!s && s.value === '__other__'; }
+
+  function build() {
+    var tpl = $('punchTpl').content.cloneNode(true);
+    var scr = $('scr'); scr.innerHTML = ''; scr.appendChild(tpl);
+    $('greet').textContent = (NOW < '12:00' ? '早安' : (NOW < '18:00' ? '午安' : '晚安')) + '，胡興裕 👋';
+    $('clock').textContent = NOW;
+    $('heroDate').textContent = '9月1日　星期二 · 啓宇營造出勤打卡';
+    var sel = $('siteSel'), h = '';
+    SITES.forEach(function (s, i) { h += '<option' + (i === 0 ? ' selected' : '') + '>' + esc(s.name + '（最近 ' + s.d + 'm）') + '</option>'; });
+    h += '<option value="__other__">其他（外勤，自行輸入）</option>';
+    sel.innerHTML = h;
+    sel.onchange = refresh;
+    $('gps').textContent = '已定位'; $('gps').className = 'gps ok';
+    $('relocBtn').onclick = function () { $('gps').textContent = '已定位'; };
+    $('btnIn').onclick = function () { punch('上班'); };
+    $('btnOut').onclick = function () { punch('下班'); };
+    $('btnOtOut').onclick = function () { punch('加班結束'); };
+    ['btnIn', 'btnOut', 'btnOtOut'].forEach(function (id) { $(id).disabled = false; });
+    refresh();
+  }
+
+  function refresh() {
+    var early = NOW < '07:30', late = NOW > '17:30', field = isField();
+    var warn = $('timeWarn'), nw = $('noteWrap'), nl = $('noteLbl'), nt = $('note');
+    var lwrap = $('lateWrap'), lwork = $('lateWork');
+    if (early) { warn.style.display = 'block'; warn.textContent = '⏰ 非正常上班時間（早到）。請於下方「備註」說明原因（必填）。'; }
+    else if (late) { warn.style.display = 'block'; warn.textContent = '🌙 已超過正常下班時間（17:30）。'; }
+    else { warn.style.display = 'none'; }
+    lwrap.style.display = late ? 'block' : 'none';
+    lwork.style.display = late ? 'block' : 'none';
+    nw.style.display = (late && !field) ? 'none' : 'block';
+    nl.textContent = field ? '備註（外勤地點／事由，必填）' : (early ? '備註（早到必填）' : '備註（選填）');
+    nt.placeholder = field ? '例：送件市政府 / 拜訪業主' : (early ? '例：提早到工地準備機具' : '例：交通延誤，遲到 10 分');
+    paintState(early, late, field);
+  }
+
+  function chip(on, yes, no) { return '<span class="pill ' + (on ? 'on' : 'off') + '">' + (on ? yes : no) + '</span>'; }
+
+  function paintState(early, late, field) {
+    var noteOn = $('noteWrap').style.display !== 'none';
+    $('state').innerHTML =
+      '<div class="srow"><b>目前時間</b><span>' + NOW + '　' + (early ? '早到時段' : (late ? '晚退時段' : '正常時段')) + '</span></div>' +
+      '<div class="srow"><b>備註欄</b>' + chip(noteOn, noteOn && (early || field) ? '顯示 · 必填' : '顯示 · 選填', '收起') + '</div>' +
+      '<div class="srow"><b>晚退原因</b>' + chip(late, '顯示 · 打下班必選', '收起') + '</div>' +
+      '<div class="srow"><b>加班原因</b>' + chip(true, '顯示 · 打加班結束必填', '') + '</div>' +
+      '<div class="srow"><b>打卡位置</b><span>' + (field ? '其他（外勤）' : $('siteSel').value) + '</span></div>';
+  }
+
+  function punch(type) {
+    var field = isField();
+    var noteOn = $('noteWrap').style.display !== 'none';
+    var note = noteOn ? $('note').value.trim() : '';
+    if (field && !note) { alert('外勤打卡請於「備註」填寫地點／事由'); $('note').focus(); return; }
+    if (type === '上班' && NOW < '07:30' && !note) { alert('非正常上班時間（早到），請於「備註」說明原因'); $('note').focus(); return; }
+    if (type === '下班' && NOW > '17:30') {
+      var lv = $('lateSel').value;
+      if (!lv) { alert('已超過正常下班時間，請先選擇「晚退原因」'); $('lateSel').focus(); return; }
+      note = note ? (lv + '；' + note) : lv;
+    }
+    if (type === '加班結束') {
+      var ov = $('otNote').value.trim();
+      if (!ov) { alert('請填寫「加班原因」'); $('otNote').focus(); return; }
+      note = note ? (ov + '；' + note) : ov;
+    }
+    LAST = {
+      type: type, note: note, field: field,
+      place: field ? ('外勤：' + note.split('；')[0]) : $('siteSel').value.replace(/（.*$/, '')
+    };
+    showRec();
+    var el = $('result');
+    el.style.display = 'block';
+    el.className = 'result ok';
+    el.textContent = '✅ ' + type + '　' + NOW + (type === '加班結束' ? '（已一併登記下班）' : '');
+  }
+
+  function showRec() {
+    if (!LAST) return;
+    var rows = [
+      ['打卡時間', '2026/09/01 ' + NOW + ':00'],
+      ['姓名', '胡興裕'],
+      ['類型', LAST.type],
+      ['方式', LAST.field ? '外勤' : '定點'],
+      ['打卡地點', LAST.place],
+      ['定位結果', LAST.field ? '外勤' : '正常'],
+      ['狀態', LAST.field ? '待核准' : '正常']
+    ];
+    var h = rows.map(function (r) {
+      return '<span class="k">' + esc(r[0]) + '</span>　<span class="v">' + esc(r[1]) + '</span>';
+    }).join('<br>');
+    h += '<br><span class="k">備註</span>　<span class="hl">' + (LAST.note ? esc(LAST.note) : '（空白）') + '</span>';
+    if (LAST.type === '加班結束') h += '<br><span class="k">　</span>　<span class="v">＋ 自動補一筆「下班」紀錄</span>';
+    $('rec').innerHTML = h;
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.regimes button'), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.regimes button'), function (x) { x.setAttribute('aria-pressed', 'false'); });
+      b.setAttribute('aria-pressed', 'true');
+      NOW = b.getAttribute('data-t');
+      LAST = null;
+      $('rec').innerHTML = '<span class="empty">尚未打卡 — 按左側的「上班／下班／加班結束」試試</span>';
+      build();
+    };
+  });
+  build();
+})();
+</script>
+
+</body>
+</html>
