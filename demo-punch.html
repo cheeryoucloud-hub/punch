@@ -93,6 +93,16 @@ body{
 .foot{ margin-top:26px; font-size:12.5px; color:var(--c-muted); line-height:1.7; }
 @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
 
+/* 出勤表單列預覽：沿用正式表單的字體與框線 */
+.sheet{ overflow-x:auto; }
+table.rpt{ border-collapse:collapse; width:100%; min-width:520px;
+  font-family:"標楷體","DFKai-SB","Noto Sans TC",serif; font-size:12px; color:#111; background:#fff; }
+table.rpt th,table.rpt td{ border:1px solid #333; padding:5px 4px; text-align:center; }
+table.rpt th{ font-weight:700; background:#F4F6F5; }
+table.rpt .sub{ display:block; font-size:9px; font-weight:400; }
+table.rpt td.l{ text-align:left; padding-left:6px; }
+table.rpt td.d{ white-space:nowrap; }
+
 /* ── 以下為 web/index.html 的原樣式，已全部限定在 #phone 之內 ── */
 #phone{
     --teal:#0E7C66; --teal-d:#0A5E4C; --teal-soft:#E4F1EC;
@@ -308,6 +318,20 @@ body{
       </div>
 
       <div class="panel">
+        <h2>出勤表上會長這樣</h2>
+        <p class="cap">同一筆打卡進到月出勤表就是這一列。此處假設當天上班已於 <b>08:00</b> 打卡。</p>
+        <div class="sheet">
+          <table class="rpt">
+            <thead>
+              <tr><th rowspan="2">出勤日期</th><th colspan="3">實際出勤時間</th><th rowspan="2">狀態</th><th rowspan="2">備註</th></tr>
+              <tr><th>① 上班<span class="sub">(07:30~8:30)</span></th><th>② 下班<span class="sub">(16:30~17:30)</span></th><th>③ 加班<span class="sub">(需ACM申請)</span></th></tr>
+            </thead>
+            <tbody><tr id="rptRow"><td class="d">115/09/01　(二)</td><td>：</td><td>：</td><td>-</td><td class="l"></td><td class="l"></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
         <h2>會擋下來的情況</h2>
         <ul class="rules">
           <li><b>早到</b>（<code>&lt; 07:30</code>）按「上班」而備註空白 → 擋下，游標跳到備註</li>
@@ -441,13 +465,44 @@ body{
       type: type, note: note, field: field,
       place: field ? ('外勤：' + note.split('；')[0]) : $('siteSel').value.replace(/（.*$/, '')
     };
-    showRec();
+    showRec(); showRow();
     var el = $('result');
     el.style.display = 'block';
     el.className = 'result ok';
     el.textContent = '✅ ' + type + '　' + NOW + (type === '加班結束' ? '（已一併登記下班）' : '');
   }
 
+  var TOL = 15;
+  function hm2m(t) { return Number(t.substring(0, 2)) * 60 + Number(t.substring(3, 5)); }
+  function dueOut(t) {
+    var h = Number(t.substring(0, 2)), m = Number(t.substring(3, 5));
+    if (h * 60 + m < 450) { h = 7; m = 30; }
+    var x = h * 60 + m + 540;
+    return ('0' + Math.floor(x / 60) % 24).slice(-2) + ':' + ('0' + (x % 60)).slice(-2);
+  }
+  /* 把這筆打卡放進當天的出勤表列（假設上班已於 08:00 打卡）*/
+  function showRow() {
+    var tr = $('rptRow'); if (!tr) return;
+    var inT = (LAST && LAST.type === '上班') ? NOW : '08:00';
+    var inN = (LAST && LAST.type === '上班') ? LAST.note : '';
+    var outT = (LAST && (LAST.type === '下班' || LAST.type === '加班結束')) ? NOW : '：';
+    var outN = (LAST && LAST.type === '下班') ? LAST.note : '';
+    var otT = (LAST && LAST.type === '加班結束') ? NOW : '-';
+    var otN = (LAST && LAST.type === '加班結束') ? LAST.note : '';
+    if (!LAST) { inT = '：'; }
+    var sp = [], nt = [], hasOT = (otT !== '-');
+    if (inT !== '：' && inT < '07:30') { sp.push('異常早到'); nt.push('① ' + (inN || '無')); }
+    if (!hasOT && inT !== '：' && outT !== '：') {
+      var diff = hm2m(outT) - hm2m(dueOut(inT));
+      if (diff < -TOL) { sp.push('早退'); nt.push('② ' + (outN || '無')); }
+      else if (diff > TOL) { sp.push('異常晚退'); nt.push('② ' + (outN || '無')); }
+    }
+    if (hasOT) { sp.push('加班申請'); nt.push('③ ' + (otN || '無')); }
+    if (!sp.length && inT !== '：' && outT !== '：') sp.push('正常');
+    var c = tr.children;
+    c[1].textContent = inT; c[2].textContent = outT; c[3].textContent = otT;
+    c[4].textContent = sp.join('/'); c[5].textContent = nt.join('｜');
+  }
   function showRec() {
     if (!LAST) return;
     var rows = [
@@ -474,10 +529,10 @@ body{
       NOW = b.getAttribute('data-t');
       LAST = null;
       $('rec').innerHTML = '<span class="empty">尚未打卡 — 按左側的「上班／下班／加班結束」試試</span>';
-      build();
+      build(); showRow();
     };
   });
-  build();
+  build(); showRow();
 })();
 </script>
 
