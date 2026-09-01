@@ -135,17 +135,8 @@
   .lg-ttl{ font-size:10.5px; color:var(--muted); font-weight:800; }
   .lg{ font-size:11px; font-weight:800; display:flex; align-items:center; gap:4px; color:#57655f; }
   .lg .sw{ width:13px; height:13px; border-radius:4px; display:inline-block; } .lg .pt{ width:9px; height:9px; border-radius:50%; display:inline-block; }
-  .rnote{ margin-top:11px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
-  .rnote b{ display:block; font-size:12px; color:var(--brand); font-weight:800; margin-bottom:5px; }
-  .rnote p{ font-size:12px; color:var(--ink); line-height:1.62; white-space:pre-line; margin:0; }
-  .maplink{ display:inline-block; color:var(--brand); font-weight:800; font-size:12.5px; text-decoration:none; border:1px solid var(--brand); border-radius:8px; padding:5px 10px; }
-  .arow .warn{ color:#C0392B; font-weight:800; }
   .snote{ margin-top:11px; font-size:11.5px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:11px; padding:9px 11px; line-height:1.5; }
 
-  .vas{ display:flex; align-items:center; gap:8px; background:#FFF6E5; border:1px solid #F3DFB4; border-radius:12px; padding:8px 10px; margin-bottom:12px; }
-  .vas b{ font-size:11.5px; color:#8A5A0E; font-weight:800; white-space:nowrap; }
-  .vas select{ flex:1; border:1px solid #EBD6A8; border-radius:9px; padding:8px 10px; font-size:13.5px; background:#fff; font-family:inherit; height:auto; }
-  .vas .rst{ border:1px solid #EBD6A8; background:#fff; color:#8A5A0E; border-radius:9px; padding:7px 10px; font-size:12px; font-weight:800; font-family:inherit; white-space:nowrap; }
   /* bottom tab bar */
   .tabbar{ position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); z-index:60; }
   .tabinner{ max-width:480px; margin:0 auto; display:flex; height:62px; padding-bottom:4px; }
@@ -176,23 +167,14 @@
     <label class="lbl" id="noteLbl">備註（選填）</label>
     <input id="note" class="fld" placeholder="例：交通延誤，遲到 10 分">
     <div id="lateWrap" style="display:none">
-      <label class="lbl">晚退原因（17:30 後必填）</label>
-      <select id="lateReason" class="fld" onchange="onLateReason()">
-        <option value="">請選擇原因…</option>
-        <option value="仍在工作">仍在工作（需申請加班）</option>
-        <option>等候交通</option>
-        <option>私人事務</option>
-        <option>於工務所休息</option>
-      </select>
-      <div id="lateWork" class="miniwarn" style="display:none">
-        ⚠️ 你選擇「仍在工作」。依法實際工作時間應計入加班：請按「<b>加班開始</b>」,工作結束時按「<b>加班結束</b>」（會自動一併登記下班,不用再打下班卡）。
-      </div>
+      <label class="lbl">晚退原因（17:30 後未加班必填）</label>
+      <select id="lateReason" class="fld"><option value="">請選擇原因…</option><option>等候交通</option><option>私人事務</option><option>於工務所休息</option></select>
     </div>
     <div class="punchbtns">
       <button class="pbtn in" id="btnIn" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M3 12h11"/><path d="M9 8l4 4-4 4"/></svg></span>上班</button>
       <button class="pbtn out" id="btnOut" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"/><path d="M21 12H10"/><path d="M17 8l4 4-4 4"/></svg></span>下班</button>
     </div>
-    <div class="otlbl">加班（於工地內按；「加班結束」會一併登記下班）</div>
+    <div class="otlbl">加班（於工地內按）</div>
     <div class="otbtns">
       <button class="otbtn" id="btnOtIn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="#0A5E4C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>加班開始</button>
       <button class="otbtn end" id="btnOtOut" disabled><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M8 3l2 2"/></svg>加班結束</button>
@@ -207,7 +189,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-31-geo-01";
+  var APP_VERSION = "2026-08-30-new-03";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -291,10 +273,6 @@
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
     }).catch(function () {});
-    loadViewEmps(function () {                                  // 人資/管理員才會拿到名單
-      var vb = document.getElementById('scViewAs'); if (vb) vb.innerHTML = viewAsBar('');
-      if (IS_ADMIN && (P.view === 'overview' || P.view === 'admin')) startOverview();
-    });
   }).catch(function (e) {
     document.getElementById('boot').textContent = '初始化失敗：' + e;
   });
@@ -352,10 +330,6 @@
 
   /* ===== 打卡 ===== */
   function nowHM() { var n = new Date(); return ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2); }
-  function onLateReason() {
-    var w = document.getElementById('lateWork'), lr = document.getElementById('lateReason');
-    if (w && lr) w.style.display = (lr.value === '仍在工作') ? 'block' : 'none';
-  }
   function refreshTimeState() {
     var warn = document.getElementById('timeWarn'); if (!warn) return;
     var lw = document.getElementById('lateWrap'), nl = document.getElementById('noteLbl'), t = nowHM();
@@ -364,7 +338,6 @@
     else if (late) { warn.style.display = 'block'; warn.textContent = '🌙 非正常下班時間。已申請加班請打「加班結束」;未申請加班請選晚退原因並完成下班打卡。'; }
     else { warn.style.display = 'none'; }
     if (lw) lw.style.display = late ? 'block' : 'none';
-    if (!late) { var lw2 = document.getElementById('lateWork'); if (lw2) lw2.style.display = 'none'; }
     if (nl) nl.textContent = early ? '備註（早到必填）' : '備註（選填）';
   }
   function startClock() {
@@ -455,11 +428,7 @@
     if (type === '上班' && t < '07:30' && !note) { alert('非正常上班時間（早到）,請於「備註」說明原因'); var ne = document.getElementById('note'); if (ne) ne.focus(); return; }
     if (type === '下班' && t > '17:30') {
       var lr = document.getElementById('lateReason'); var v = lr ? lr.value : '';
-      if (!v) { alert('非正常下班時間,請先選擇「晚退原因」'); return; }
-      if (v === '仍在工作') {
-        alert('你選擇「仍在工作」。\n\n實際工作時間依法應計入加班,請改按「加班開始／加班結束」完成加班打卡。\n若已結束加班,請先打「加班結束」再打下班卡。');
-        return;
-      }
+      if (!v) { alert('非正常下班時間,請先選擇「晚退原因」;若有加班請改打「加班結束」'); return; }
       note = note ? (v + '；' + note) : v;
     }
     var site = '', siteName = '';
@@ -474,7 +443,6 @@
     if (!res || !res.ok) { showResult(false, (res && res.msg) || '打卡失敗'); ready(); return; }
     var okStatus = (res.status === '正常' || res.status === '待核准');
     var t = '打卡成功　' + res.time;
-    if (res.alsoOut) t = '加班結束　' + res.time + '（已一併登記下班,不用再打下班卡）';
     if (res.status === '待核准') t = '外勤已送出，待主管核准';
     else if (res.status !== '正常') t = '已記錄，定位異常（' + res.status + '）';
     else if (res.distance !== '') t += '（距工地 ' + res.distance + ' 公尺）';
@@ -697,7 +665,6 @@
     var d = new Date(); scState.year = d.getFullYear(); scState.month = d.getMonth() + 1;
     document.getElementById('wrap').innerHTML =
       '<div class="hdr"><h1>我的班表</h1><p id="scWho">當月排休與行事曆</p></div>' +
-      '<div id="scViewAs"></div>' +
       '<div class="msel"><button class="ar" id="scPrev">‹</button><span id="scYm"></span><button class="ar" id="scNext">›</button></div>' +
       '<div id="scBody"><div class="muted" style="text-align:center;padding:22px">載入中…</div></div>' + tabBar('schedule');
     document.getElementById('scPrev').onclick = function () { scShift(-1); };
@@ -711,23 +678,15 @@
   }
   function loadSchedule() {
     document.getElementById('scYm').textContent = scState.year + ' 年 ' + scState.month + ' 月';
-    var ck = 'sc_' + scState.year + '_' + scState.month + '_' + VIEW_AS;
-    var cached = lcGet(ck);
-    if (cached) renderSchedule(cached);                              // 先秒開舊畫面
-    else document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">載入中…</div>';
-    post({ action: 'schedule', idToken: me.idToken, year: scState.year, month: scState.month, viewAs: VIEW_AS })
-      .then(function (r) { if (r && r.ok) lcSet(ck, r); renderSchedule(r); })
+    document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">載入中…</div>';
+    post({ action: 'schedule', idToken: me.idToken, year: scState.year, month: scState.month })
+      .then(renderSchedule)
       .catch(function (e) { document.getElementById('scBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">讀取失敗：' + esc(e) + '</div>'; });
   }
   function renderSchedule(res) {
     var body = document.getElementById('scBody'); if (!body) return;
     if (!res || !res.ok) { body.innerHTML = '<div class="muted" style="text-align:center;padding:22px">' + esc((res && res.msg) || '讀取失敗') + '</div>'; return; }
-    var who = document.getElementById('scWho'); if (who) who.textContent = res.name + ' · 當月排休與行事曆';
-    var vbar = document.getElementById('scViewAs');
-    if (vbar) {
-      vbar.innerHTML = viewAsBar(res.name);
-      if (VIEW_EMPS === null) loadViewEmps(function () { var v2 = document.getElementById('scViewAs'); if (v2) v2.innerHTML = viewAsBar(res.name); });
-    }
+    var who = document.getElementById('scWho'); if (who) who.textContent = esc(res.name) + ' · 當月排休與行事曆';
     var y = res.year, m = res.month, leaves = res.leaves || {}, special = res.special || {}, holi = res.holidays || {};
     var dim = new Date(y, m, 0).getDate(), first = new Date(y, m - 1, 1).getDay(), wk = ['日', '一', '二', '三', '四', '五', '六'];
     var h = '<div class="cal"><div class="wk">';
@@ -757,63 +716,11 @@
       '<span class="lg"><i class="pt" style="background:#5AA02C"></i>職安會議</span>' +
       '<span class="lg"><i class="pt" style="background:#E07B39"></i>公司活動</span>' +
       '<span class="lg"><i class="pt" style="background:#D0452F"></i>國定假日</span></div></div>';
-    var rn = String(res.note || '').trim();
-    if (rn) h += '<div class="rnote"><b>注意事項</b><p>' + esc(rn) + '</p></div>';
     h += '<div class="snote">排休與會議由人資／負責人設定，國定假日自動帶入。異動請至「調休申請」。</div>';
     body.innerHTML = h;
   }
 
   /* ===== 出勤概覽 ===== */
-  /* 本地快取：先用上次的結果立刻顯示,同時背景抓最新（體感秒開）
-     用 localStorage,關掉 LIFF 再打開仍然是秒開;12 小時後自動失效,最多留 40 筆 */
-  var LC_TTL = 12 * 3600 * 1000, LC_MAX = 40;
-  function lcStore() { try { return window.localStorage || window.sessionStorage; } catch (e) { return null; } }
-  function lcGet(k) {
-    try {
-      var st = lcStore(); if (!st) return null;
-      var raw = st.getItem('qy_c_' + k); if (!raw) return null;
-      var o = JSON.parse(raw);
-      if (!o || !o.t || (Date.now() - o.t) > LC_TTL) { st.removeItem('qy_c_' + k); return null; }
-      return o.v;
-    } catch (e) { return null; }
-  }
-  function lcSet(k, v) {
-    try {
-      var st = lcStore(); if (!st) return;
-      st.setItem('qy_c_' + k, JSON.stringify({ t: Date.now(), v: v }));
-      var keys = [];
-      for (var i = 0; i < st.length; i++) { var kk = st.key(i); if (kk && kk.indexOf('qy_c_') === 0) keys.push(kk); }
-      if (keys.length > LC_MAX) {
-        keys.map(function (kk) {
-          var t = 0; try { t = (JSON.parse(st.getItem(kk)) || {}).t || 0; } catch (e) { }
-          return { k: kk, t: t };
-        }).sort(function (a, b) { return a.t - b.t; }).slice(0, keys.length - LC_MAX)
-          .forEach(function (o) { try { st.removeItem(o.k); } catch (e) { } });
-      }
-    } catch (e) { }
-  }
-  function lcToday() { var d = new Date(); return d.getFullYear() + '' + (d.getMonth() + 1) + '' + d.getDate(); }
-  var VIEW_AS = '', VIEW_EMPS = null, IS_ADMIN = false;
-  try { VIEW_AS = sessionStorage.getItem('qy_viewas') || ''; } catch (e) { }
-  function setViewAs(v) { VIEW_AS = v || ''; try { v ? sessionStorage.setItem('qy_viewas', v) : sessionStorage.removeItem('qy_viewas'); } catch (e) { }
-    if (P.view === 'schedule') loadSchedule(); else startOverview(); }
-  var B_Q = '\'\'';   // 產生 onclick 內的 '' 
-  function viewAsBar(curName) {
-    if (!IS_ADMIN) return '';
-    if (VIEW_EMPS === null) return '<div class="vas"><b>👁 視角</b><span class="muted" style="font-size:12.5px">載入員工名單…</span></div>';
-    var opts = '<option value="">（我自己）</option>';
-    (VIEW_EMPS || []).forEach(function (e) { opts += '<option value="' + esc(e.empId) + '"' + (String(e.empId) === String(VIEW_AS) ? ' selected' : '') + '>' + esc(e.name + (e.site ? '（' + e.site + '）' : '')) + '</option>'; });
-    return '<div class="vas"><b>👁 視角</b><select onchange="setViewAs(this.value)">' + opts + '</select>' +
-           (VIEW_AS ? '<button class="rst" onclick="setViewAs(' + B_Q + ')">回我自己</button>' : '') + '</div>';
-  }
-  function loadViewEmps(cb) {
-    if (VIEW_EMPS) { cb && cb(); return; }
-    post({ action: 'empListLine', idToken: me.idToken }).then(function (r) {
-      if (r && r.ok) { VIEW_EMPS = r.list || []; IS_ADMIN = true; }
-      else { VIEW_EMPS = []; }          // 失敗也要填空陣列,否則會一直重試/重繪
-      cb && cb();
-    }).catch(function () { VIEW_EMPS = []; cb && cb(); });
-  }
   var ovDate = '', ovCur = '';   // ovDate=送給後端的查詢日('' 表今日)；ovCur=目前顯示日
   function ovShift(n) {
     var p = ovCur.split('/'); var dt = new Date(+p[0], +p[1] - 1, +p[2]); dt.setDate(dt.getDate() + n);
@@ -834,12 +741,8 @@
       (isToday ? '' : '<button class="dtoday" onclick="ovToday()">回今日</button>') + '</div>';
   }
   function startOverview() {
-    var ck = 'ov_' + lcToday() + '_' + (ovDate || 'today') + '_' + VIEW_AS;
-    var cached = lcGet(ck);
-    if (cached) renderOverview(cached, true);                       // 先秒開舊畫面
-    else document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入出勤概覽…</div></div>';
-    post({ action: 'overview', idToken: me.idToken, date: ovDate, viewAs: VIEW_AS })
-      .then(function (d) { if (d && d.ok) lcSet(ck, d); renderOverview(d); })
+    document.getElementById('wrap').innerHTML = '<div class="card"><div class="sub">載入出勤概覽…</div></div>';
+    post({ action: 'overview', idToken: me.idToken, date: ovDate }).then(renderOverview)
       .catch(function (e) { document.getElementById('wrap').innerHTML = '<div class="card">讀取失敗：' + esc(e) + '</div>'; });
   }
   function ovMd(s) { var p = String(s).split('/'); return p.length >= 3 ? (Number(p[1]) + '/' + Number(p[2])) : s; }
@@ -852,8 +755,8 @@
     if (!m) return '<div class="muted">—</div>';
     if (m.leave) return '<div class="myleave"><small>今日</small>' + esc(m.leave) + '</div>';
     return '<div class="myday">' +
-      '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班' + (m.inPending ? '（待核准）' : '') + '</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
-      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班' + (m.outPending ? '（待核准）' : '') + '</span><b>' + esc(m.out || '未打卡') + '</b></div>' +
+      '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
+      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班</span><b>' + esc(m.out || '未打卡') + '</b></div>' +
       '</div>';
   }
   function ovActions(kind, id, canAct) {
@@ -868,28 +771,10 @@
       (x.reason ? '<div class="muted">理由：' + esc(x.reason) + '</div>' : '') +
       ovActions('transfer', x.id, x.canAct) + '</div>';
   }
-  /* 外勤／定位異常：開 Google 地圖看實際打卡位置 */
-  function ovMapLink(x) {
-    var la = Number(x.lat), ln = Number(x.lng);
-    if (!isFinite(la) || !isFinite(ln) || (!la && !ln)) return '';
-    return '<a class="maplink" href="https://www.google.com/maps/search/?api=1&query=' + la + ',' + ln +
-      '" target="_blank" rel="noopener">📍 查看打卡位置</a>';
-  }
   function ovPnCard(x, kind) {
-    var typeTxt = (kind === 'field') ? '（外勤）' : (kind === 'geo' ? '（定位異常）' : '（補打）');
-    var loc = '';
-    if (kind === 'geo' || kind === 'field') {
-      var bits = [];
-      if (x.place) bits.push(esc(x.place));
-      if (x.geo === '超出範圍' || x.geo === '無定位') bits.push('<b class="warn">' + esc(x.geo) + (x.dist ? ('・' + esc(x.dist) + ' 公尺') : '') + '</b>');
-      if (bits.length) loc += '<div class="muted">地點：' + bits.join('　') + '</div>';
-      var ml = ovMapLink(x);
-      if (ml) loc += '<div style="margin-top:4px">' + ml + '</div>';
-      else if (x.geo === '無定位') loc += '<div class="muted" style="margin-top:4px">（手機未取得定位,無座標可查）</div>';
-    }
+    var typeTxt = (kind === 'field') ? '（外勤）' : '（補打）';
     return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
       '<div class="muted">' + esc(x.date + ' ' + x.time + '　' + x.punchType) + typeTxt + '</div>' +
-      loc +
       (x.reason ? '<div class="muted">事由：' + esc(x.reason) + '</div>' : '') +
       ovActions('punch', x.recordId, x.canAct) + '</div>';
   }
@@ -901,15 +786,13 @@
     list.forEach(function (x) { h += (kind === 'transfer') ? ovTfCard(x) : ovPnCard(x, kind); });
     return h;
   }
-  function renderOverview(d, isCache) {
+  function renderOverview(d) {
     var w = document.getElementById('wrap');
     if (!d || !d.ok) { w.innerHTML = '<div class="card"><div class="gps err">讀取失敗：' + esc((d && d.msg) || '（無訊息）') + '</div></div>' + tabBar('overview'); return; }
     if (!d.bound) { w.innerHTML = '<div class="card"><h1>尚未綁定</h1><p class="muted">請先從打卡頁完成綁定後再使用。</p></div>' + tabBar('overview'); return; }
 
     ovCur = d.date;
-    if (d.isAdmin) IS_ADMIN = true;
-    if (!isCache && IS_ADMIN && VIEW_EMPS === null) { loadViewEmps(function () { renderOverview(d); }); }
-    var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.name) + '（' + esc(d.role) + '）' + (d.viewing ? ' · 以 <b>' + esc(d.viewing) + '</b> 的視角檢視' : '') + '</div>' + viewAsBar(d.name) + ovDatebar(d);
+    var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.name) + '（' + esc(d.role) + '）</div>' + ovDatebar(d);
     html += '<div class="card" style="margin-bottom:14px"><div class="myday-title">' + (d.date === d.today ? '我的今日出勤' : '我的當日出勤') + '</div>' + ovMy(d.me) + '</div>';
 
     if (d.sites && d.sites.length) {
@@ -922,9 +805,7 @@
         g.people.forEach(function (pp) {
           if (pp.leave) { html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">' + esc(pp.leave) + '</td></tr>'; return; }
           var miss = pp.in ? '' : ' class="miss"';
-          var ci = pp.in ? (esc(pp.in) + (pp.inPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
-          var co = pp.out ? (esc(pp.out) + (pp.outPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
-          html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td' + (pp.in ? '' : ' class="nopunch"') + '>' + ci + '</td><td' + (pp.out ? '' : ' class="nopunch"') + '>' + co + '</td></tr>';
+          html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td' + (pp.in ? '' : ' class="nopunch"') + '>' + esc(pp.in || '未打卡') + '</td><td' + (pp.out ? '' : ' class="nopunch"') + '>' + esc(pp.out || '未打卡') + '</td></tr>';
         });
         html += '</table></div>';
       });
@@ -933,7 +814,6 @@
     html += ovSection('調休申請', 'transfer', d.apps.transfer);
     html += ovSection('補打卡申請', 'makeup', d.apps.makeup);
     html += ovSection('外勤申請', 'field', d.apps.field);
-    html += ovSection('定位異常', 'geo', d.apps.geo);
     html += '<button class="refresh" id="ovRefresh">↻ 重新整理</button>';
     html += tabBar('overview');
     w.innerHTML = html;
