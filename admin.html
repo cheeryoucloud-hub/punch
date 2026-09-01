@@ -279,6 +279,7 @@
   .rpt-meta{ display:flex; gap:44px; font-size:13px; margin:0 2px 8px; }
   table.att{ width:100%; border-collapse:collapse; font-size:10.5px; }
   .att th,.att td{ border:1px solid #333; padding:1px 3px; text-align:center; height:auto; color:#000; }
+  .att td.st,.att td.nt{ text-align:left; padding-left:5px; }        /* 狀態、備註靠左（與 Excel 相同）*/
   .att thead th{ background:#f0f0f0; font-weight:700; }
   .att .sub{ font-size:9px; font-weight:400; color:#555; }
   .att td.dt{ white-space:nowrap; font-size:11px; }
@@ -1555,8 +1556,8 @@ function reportHtml(j,ed){
     '<div class="rpt-co">'+esc(j.company)+'</div>'+
     '<div class="rpt-ti"><u>'+j.rocYear+'</u> 年 <u>'+p2(j.month)+'</u> 月份　出勤紀錄表</div>'+
     '<div class="rpt-meta"><span>工地別：'+esc(j.site||'')+'</span><span>姓名：'+esc(j.name)+'</span></div>'+
-    '<div class="tblwrap"><table class="att"><thead><tr><th rowspan="2" style="width:96px">出勤日期</th><th colspan="3">實際出勤時間</th><th rowspan="2" style="width:110px">狀態</th><th rowspan="2" style="width:190px">備註</th></tr>'+
-    '<tr><th>① 上班<br><span class="sub">(07:30~8:30)</span></th><th>② 下班<br><span class="sub">(16:30~17:30)</span></th><th>③ 加班<br><span class="sub">(需ACM申請)</span></th></tr></thead><tbody>';
+    '<div class="tblwrap"><table class="att" style="table-layout:fixed"><thead><tr><th rowspan="2" style="width:12.4%">出勤日期</th><th colspan="3">實際出勤時間</th><th rowspan="2" style="width:18.8%">狀態</th><th rowspan="2" style="width:40.2%">備註</th></tr>'+
+    '<tr><th style="width:9.5%">① 上班<br><span class="sub">(07:30~8:30)</span></th><th style="width:9.5%">② 下班<br><span class="sub">(16:30~17:30)</span></th><th style="width:9.5%">③ 加班<br><span class="sub">(需ACM申請)</span></th></tr></thead><tbody>';
   j.rows.forEach(function(r){
     var dcell='<td class="dt">'+r.roc+'　('+r.wk+')</td>';
     var trAttr=' data-day="'+r.day+'"'+(ed?' title="右鍵可設定假別"':'');
