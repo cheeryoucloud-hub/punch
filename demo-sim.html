@@ -1,14 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
 <title>啓宇打卡系統 · 打卡流程沙盤</title>
-<meta name="description" content="可操作的打卡與補打卡流程模擬：調時間與定位後實際打卡，看到紀錄、通知與出勤表結果。">
 </head>
 <body>
-
+<title>打卡流程沙盤</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -33,6 +32,11 @@
 body{ margin:0; background:var(--c-shell); color:var(--c-ink);
   font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
 .page{ max-width:1320px; margin:0 auto; padding:30px 20px 60px; }
+.alert{ display:flex; gap:12px; align-items:flex-start; background:rgba(185,118,15,.10);
+  border:1px solid rgba(185,118,15,.34); border-radius:14px; padding:14px 17px; margin-bottom:22px;
+  font-size:13.5px; line-height:1.75; color:var(--c-ink); }
+.alert .ic{ font-size:17px; line-height:1.4; }
+.alert b{ color:var(--c-amber); }
 .eyebrow{ font-size:12px; font-weight:700; letter-spacing:.16em; color:var(--c-accent); margin:0 0 6px; }
 h1.top{ font-size:29px; font-weight:900; margin:0 0 8px; letter-spacing:-.01em; }
 .lead{ margin:0 0 22px; font-size:14.5px; line-height:1.75; color:var(--c-muted); max-width:66ch; }
@@ -298,6 +302,11 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
 </style>
 
 <div class="page">
+  <div class="alert">
+    <span class="ic">⚠️</span>
+    <div><b>目前的打卡規則為暫定版本</b>，上下班時段、加班與備註的必填條件、狀態判定方式，
+    都要等主管會議討論後才正式定案。這個頁面僅供先行試用與討論參考，實際規則以定案後公告為準。</div>
+  </div>
   <p class="eyebrow">啓宇打卡系統 · 流程沙盤</p>
   <h1 class="top">打卡流程沙盤</h1>
   <p class="lead">調時間、調定位，然後真的去按打卡與補打卡。右側會照系統實際規則產生打卡紀錄、發出 LINE 通知、等你簽核，最後結算成出勤表的那一列。所有判斷邏輯與正式系統相同，但不會寫入任何真實資料。</p>
@@ -315,6 +324,10 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
       <option value="in">在工地內（距離 92 公尺）</option>
       <option value="out">超出範圍（距離 842 公尺）</option>
       <option value="none">手機抓不到定位</option>
+    </select></div>
+    <div class="f"><label for="cNotify">事件通知（後台可停用）</label><select id="cNotify">
+      <option value="on">管理員已啟用</option>
+      <option value="off">管理員已停用</option>
     </select></div>
     <button type="button" class="reset" id="cReset">清空重來</button>
   </div>
@@ -353,7 +366,7 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
 
       <div class="panel">
         <h2>LINE 通知<span class="n" id="msgN"></span></h2>
-        <p class="cap">只有需要簽核或異常的情況才發，正常打卡不發，以節省訊息額度。</p>
+        <p class="cap">只有需要簽核或異常的情況才發，正常打卡不發，以節省訊息額度。<b>此功能需管理員在後台「LINE提醒 → 事件觸發通知」啟用</b>；停用時系統仍會照常記錄與送簽，只是不發卡片。</p>
         <div id="msgBox"></div>
       </div>
 
@@ -385,7 +398,7 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
   var GEO = { in: { txt: '正常', dist: 92, lat: 23.891615, lng: 120.667160 },
               out: { txt: '超出範圍', dist: 842, lat: 23.947015, lng: 120.662326 },
               none: { txt: '無定位', dist: '', lat: '', lng: '' } };
-  var NOW = '08:05', GEOK = 'in', PAGE = 'punch';
+  var NOW = '08:05', GEOK = 'in', PAGE = 'punch', NOTIFY = true;
   var LOG = [], MSG = [], SEQ = 0;
 
   function $(id) { return document.getElementById(id); }
@@ -520,6 +533,7 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
     paint();
   }
   function notify(title, color, rec, reason) {
+    if (!NOTIFY) return;                       // 管理員在後台停用了事件通知
     MSG.push({ title: title, color: color, rows: [['姓名', NAME], ['工地', SITE], ['類型', rec.type],
       ['時間', rec.dt], ['地點', rec.place], ['原因', reason || '（未填寫）']],
       to: '工地負責人（當事人為負責人時→工地主管）' });
@@ -571,7 +585,8 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
     }).join('');
     // 通知
     $('msgN').textContent = MSG.length ? MSG.length + ' 則' : '';
-    if (!MSG.length) $('msgBox').innerHTML = '<div class="emptyrow">還沒有發出通知</div>';
+    if (!NOTIFY) $('msgBox').innerHTML = '<div class="emptyrow">管理員已在後台停用事件通知<br><span style="font-size:12px">紀錄與簽核照常運作，只是不發 LINE 卡片</span></div>';
+    else if (!MSG.length) $('msgBox').innerHTML = '<div class="emptyrow">還沒有發出通知</div>';
     else $('msgBox').innerHTML = MSG.slice().reverse().map(function (m) {
       return '<div class="card"><div class="hd" style="background:' + m.color + '">' + esc(m.title) + '</div>' +
         '<div class="bd">' + m.rows.map(function (kv) { return '<span class="k">' + esc(kv[0]) + '</span>' + esc(kv[1]); }).join('<br>') + '</div>' +
@@ -597,15 +612,22 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
     var mIn = pick('上班', false), mOut = pick('下班', true), mOt = pick('加班結束', true);
     var inN = mIn ? mIn.note : '', outN = mOut ? mOut.note : '', otN = mOt ? mOt.note : '';
     var inT = mIn ? mIn.time : '：', outT = mOut ? mOut.time : '：', otT = mOt ? mOt.time : '-';
-    var sp = [], nt = [], hasOT = (otT !== '-');
-    if (inT !== '：' && inT < '07:30') { sp.push('異常早到'); nt.push('① ' + (inN || '無')); }
+    var sp = [], hasOT = (otT !== '-'), fIn = false, fOut = false;
+    if (inT !== '：' && inT < '07:30') { sp.push('異常早到'); fIn = true; }
     if (!hasOT && inT !== '：' && outT !== '：') {
       var d = hm2m(outT) - hm2m(dueOut(inT));
-      if (d < -15) { sp.push('早退'); nt.push('② ' + (outN || '無')); }
-      else if (d > 15) { sp.push('異常晚退'); nt.push('② ' + (outN || '無')); }
+      if (d < -15) { sp.push('早退'); fOut = true; }
+      else if (d > 15) { sp.push('異常晚退'); fOut = true; }
     }
-    if (hasOT) { sp.push('加班申請'); nt.push('③ ' + (otN || '無')); }
+    if (hasOT) sp.push('加班申請');
     if (!sp.length && inT !== '：' && outT !== '：') sp.push('正常');
+    // 備註：①②③ 三欄各自獨立帶出,有寫就顯示;被判異常卻沒寫原因才標「無」
+    var nt = [];
+    function ntAdd(no, txt, flagged) {
+      var t = String(txt == null ? '' : txt).trim();
+      if (t) nt.push(no + ' ' + t); else if (flagged) nt.push(no + ' 無');
+    }
+    ntAdd('①', inN, fIn); ntAdd('②', outN, fOut); ntAdd('③', otN, hasOT);
     var c = $('rptRow').children;
     c[1].textContent = inT; c[2].textContent = outT; c[3].textContent = otT;
     c[4].textContent = sp.join('/'); c[5].textContent = nt.join('｜');
@@ -621,6 +643,7 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
     b.onclick = function () { NOW = b.getAttribute('data-t'); $('cTime').value = NOW; drawPhone(); };
   });
   $('cGeo').addEventListener('change', function () { GEOK = this.value; drawPhone(); });
+  $('cNotify').addEventListener('change', function () { NOTIFY = (this.value === 'on'); paint(); });
   $('cReset').onclick = function () { LOG = []; MSG = []; SEQ = 0; drawPhone(); paint(); };
   Array.prototype.forEach.call(document.querySelectorAll('.ptabs button'), function (b) {
     b.onclick = function () {
