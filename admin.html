@@ -1652,17 +1652,25 @@ function baseScreen(which){
     if(j.pwFixed) toast('已將 '+j.pwFixed+' 組明碼密碼自動轉為 SHA-256 雜湊');
   });
 }
-function mapThumb(lat,lng,name){
+function mapThumb(lat,lng,name,radius){
   var la=Number(lat), ln=Number(lng);
   if(!isFinite(la)||!isFinite(ln)||(!la&&!ln)) return '<span class="hint">—</span>';
   var z=16, n=Math.pow(2,z);
   var xt=Math.floor((ln+180)/360*n);
   var yt=Math.floor((1-Math.log(Math.tan(la*Math.PI/180)+1/Math.cos(la*Math.PI/180))/Math.PI)/2*n);
   var tile='https://tile.openstreetmap.org/'+z+'/'+xt+'/'+yt+'.png';
-  var g='https://www.google.com/maps/search/?api=1&query='+la+','+ln;
-  return '<a class="mapthumb" href="'+g+'" target="_blank" rel="noopener" title="'+esc(name||'')+' — 點擊在 Google 地圖開啟">'+
+  var rd=Number(radius)||0;
+  return '<a class="mapthumb" href="javascript:void(0)" data-nm="'+esc(name||'')+'" onclick="openGeoMap('+la+','+ln+','+rd+',this.getAttribute(\'data-nm\'))" title="'+esc(name||'')+' — 點擊查看容許範圍在地圖上的實際大小">'+
          '<img src="'+tile+'" alt="map" loading="lazy" onerror="this.remove()">'+
-         '<span class="pin">📍</span><span class="go">Google 地圖</span></a>';
+         '<span class="pin">📍</span><span class="go">查看範圍</span></a>';
+}
+/* 打卡座標：看容許範圍在地圖上實際多大 */
+function openGeoMap(la,ln,rd,name){
+  modal('打卡範圍 · '+name,
+    '<div class="hint" style="margin-bottom:9px">容許半徑 <b>'+rd+'</b> 公尺　·　座標 '+la.toFixed(6)+', '+ln.toFixed(6)+'</div>'+
+    punchMapHtml({ geoLat:la, geoLng:ln, radius:rd, lat:'', lng:'' })+
+    '<div class="hint" style="margin-top:8px">綠色圈內打卡才算正常;圈外會被標記為定位異常,需負責人核准。</div>',
+    function(){ closeModal(); });
 }
 function pillStat(v){ v=String(v); if(v==='在職')return '<span class="pill ok">在職</span>'; if(v==='離職')return '<span class="pill mut">離職</span>'; if(v==='啟用')return '<span class="pill ok">啟用</span>'; if(v==='停用')return '<span class="pill mut">停用</span>'; return esc(v); }
 function pillRole(v){ var m={'管理員':'bad','人資':'info','主管':'wait','工地負責人':'mut','一般':'mut'}[String(v)]||'mut'; return '<span class="pill '+m+'">'+esc(v)+'</span>'; }
@@ -1672,7 +1680,7 @@ function renderBase(which,edit){
   var isGeo=(which==='geo');
   var h='<table class="tbl" id="baseTable"><thead><tr>'+(isGeo?'<th style="width:112px">地圖</th>':'')+heads.map(function(x){return '<th>'+esc(x)+'</th>';}).join('')+(edit?'<th class="r">操作</th>':'')+'</tr></thead><tbody>';
   t.rows.forEach(function(r,i){
-    h+='<tr>'+(isGeo?('<td>'+mapThumb(r['緯度'],r['經度'],r['地點名稱'])+'</td>'):'')+heads.map(function(x){
+    h+='<tr>'+(isGeo?('<td>'+mapThumb(r['緯度'],r['經度'],r['地點名稱'],r['容許半徑(公尺)'])+'</td>'):'')+heads.map(function(x){
       var v=r[x];
       if(x==='姓名'||x==='工地別'||x==='地點名稱'||x==='帳號') return '<td><b>'+esc(v)+'</b></td>';
       if(x==='在職狀態'||x==='狀態') return '<td>'+pillStat(v)+'</td>';

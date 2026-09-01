@@ -152,6 +152,16 @@
   .rnote{ margin-top:11px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
   .rnote b{ display:block; font-size:12px; color:var(--brand); font-weight:800; margin-bottom:5px; }
   .rnote p{ font-size:12px; color:var(--ink); line-height:1.62; white-space:pre-line; margin:0; }
+  .mpwrap{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line); background:#e8eef0; max-width:100%; }
+  .mplg{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--ink); }
+  .mplg .sw{ display:inline-block; width:13px; height:13px; border-radius:4px; background:rgba(14,124,102,.3); border:1.5px solid #0E7C66; vertical-align:-2px; margin-right:4px; }
+  .mplg .dot{ display:inline-block; width:11px; height:11px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #bbb; vertical-align:-1px; margin-right:4px; }
+  #mpModal{ position:fixed; inset:0; z-index:9997; display:none; align-items:center; justify-content:center; background:rgba(15,30,26,.5); padding:14px; }
+  #mpModal .bx{ background:#fff; border-radius:16px; padding:15px; max-width:94vw; max-height:92vh; overflow:auto; }
+  #mpModal .hd{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:5px; }
+  #mpModal .hd b{ font-size:16px; }
+  #mpModal .hd span{ font-size:12px; color:var(--muted); }
+  #mpModal .cls{ width:100%; margin-top:11px; border:none; border-radius:10px; padding:11px 0; font-size:14.5px; font-weight:800; font-family:inherit; background:var(--teal); color:#fff; }
   .maplink{ display:inline-block; color:var(--brand); font-weight:800; font-size:12.5px; text-decoration:none; border:1px solid var(--brand); border-radius:8px; padding:5px 10px; }
   .arow .warn{ color:#C0392B; font-weight:800; }
   .snote{ margin-top:11px; font-size:11.5px; color:var(--muted); background:#fff; border:1px dashed var(--line); border-radius:11px; padding:9px 11px; line-height:1.5; }
@@ -221,7 +231,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-08-31-geo-02";
+  var APP_VERSION = "2026-09-01-map-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -882,12 +892,87 @@
       (x.reason ? '<div class="muted">理由：' + esc(x.reason) + '</div>' : '') +
       ovActions('transfer', x.id, x.canAct) + '</div>';
   }
+  /* ===== 打卡位置小地圖（含容許範圍圈；OSM 圖磚 + SVG，無外部函式庫）===== */
+  var MP_W = 320, MP_H = 300, MP_TILE = 256;
+  function mpX(lng, z) { return (lng + 180) / 360 * Math.pow(2, z) * MP_TILE; }
+  function mpY(lat, z) { var r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z) * MP_TILE; }
+  function mpMpp(lat, z) { return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z); }
+  function mpDist(la1, ln1, la2, ln2) {
+    var R = 6371000, tr = Math.PI / 180;
+    var dLa = (la2 - la1) * tr, dLn = (ln2 - ln1) * tr;
+    var a = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(la1 * tr) * Math.cos(la2 * tr) * Math.sin(dLn / 2) * Math.sin(dLn / 2);
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function mpZoom(lat, radius, dist) {
+    var need = Math.max(Number(radius) || 0, Number(dist) || 0) * 2.4 + 60;
+    for (var z = 19; z >= 10; z--) { if (need / mpMpp(lat, z) <= Math.min(MP_W, MP_H)) return z; }
+    return 10;
+  }
+  function mpHtml(x) {
+    var pLat = Number(x.lat), pLng = Number(x.lng);
+    var cLat = Number(x.geoLat), cLng = Number(x.geoLng), rad = Number(x.radius);
+    var hasP = isFinite(pLat) && isFinite(pLng) && (pLat || pLng);
+    var hasC = isFinite(cLat) && isFinite(cLng) && (cLat || cLng) && isFinite(rad) && rad > 0;
+    if (!hasP && !hasC) return '<div class="empty">這筆沒有座標可顯示</div>';
+    var aLat = hasC ? cLat : pLat;
+    var dist = (hasP && hasC) ? mpDist(pLat, pLng, cLat, cLng) : 0;
+    var z = mpZoom(aLat, hasC ? rad : 120, dist);
+    var mLat = (hasP && hasC) ? (pLat + cLat) / 2 : aLat;
+    var mLng = (hasP && hasC) ? (pLng + cLng) / 2 : (hasC ? cLng : pLng);
+    var left = mpX(mLng, z) - MP_W / 2, top = mpY(mLat, z) - MP_H / 2;
+    var t0x = Math.floor(left / MP_TILE), t0y = Math.floor(top / MP_TILE);
+    var t1x = Math.floor((left + MP_W) / MP_TILE), t1y = Math.floor((top + MP_H) / MP_TILE);
+    var tiles = '';
+    for (var tx = t0x; tx <= t1x; tx++) for (var ty = t0y; ty <= t1y; ty++) {
+      if (ty < 0 || ty >= Math.pow(2, z)) continue;
+      var nx = ((tx % Math.pow(2, z)) + Math.pow(2, z)) % Math.pow(2, z);
+      tiles += '<img src="https://tile.openstreetmap.org/' + z + '/' + nx + '/' + ty + '.png" style="position:absolute;left:' + (tx * MP_TILE - left) + 'px;top:' + (ty * MP_TILE - top) + 'px;width:256px;height:256px" loading="lazy" alt="">';
+    }
+    function pt(lat, lng) { return { x: mpX(lng, z) - left, y: mpY(lat, z) - top }; }
+    var svg = '<svg width="' + MP_W + '" height="' + MP_H + '" style="position:absolute;left:0;top:0">';
+    if (hasC) {
+      var c = pt(cLat, cLng), rpx = rad / mpMpp(cLat, z);
+      svg += '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + rpx + '" fill="rgba(14,124,102,.16)" stroke="#0E7C66" stroke-width="2"/>';
+      svg += '<circle cx="' + c.x + '" cy="' + c.y + '" r="4" fill="#0E7C66" stroke="#fff" stroke-width="2"/>';
+    }
+    if (hasP) {
+      var q = pt(pLat, pLng), inside = hasC ? (dist <= rad) : true;
+      if (hasC) {
+        var c2 = pt(cLat, cLng);
+        svg += '<line x1="' + c2.x + '" y1="' + c2.y + '" x2="' + q.x + '" y2="' + q.y + '" stroke="' + (inside ? '#0E7C66' : '#C0392B') + '" stroke-width="2" stroke-dasharray="5 4"/>';
+      }
+      svg += '<circle cx="' + q.x + '" cy="' + q.y + '" r="7" fill="' + (inside ? '#0E7C66' : '#C0392B') + '" stroke="#fff" stroke-width="3"/>';
+    }
+    svg += '</svg>';
+    var legend = '<div class="mplg">';
+    if (hasC) legend += '<span><i class="sw"></i>容許範圍 ' + rad + ' 公尺</span>';
+    if (hasP) legend += '<span><i class="dot" style="background:' + ((hasC && dist > rad) ? '#C0392B' : '#0E7C66') + '"></i>打卡位置</span>';
+    if (hasP && hasC) legend += '<b style="color:' + (dist <= rad ? '#0E7C66' : '#C0392B') + '">距圓心 ' + Math.round(dist) + ' 公尺 · ' + (dist <= rad ? '範圍內' : '超出範圍') + '</b>';
+    legend += '</div>';
+    return '<div class="mpwrap" style="width:' + MP_W + 'px;height:' + MP_H + 'px">' + tiles + svg + '</div>' + legend;
+  }
+  function openMapModal(i) {
+    var x = (OV_LOC || [])[i]; if (!x) return;
+    var el = document.getElementById('mpModal');
+    if (!el) { el = document.createElement('div'); el.id = 'mpModal'; document.body.appendChild(el); }
+    var g = (Number(x.lat) || Number(x.lng)) ? ('https://www.google.com/maps/search/?api=1&query=' + x.lat + ',' + x.lng) : '';
+    var h = '<div class="bx"><div class="hd"><b>' + esc(x.name) + '</b><span>' + esc(x.date + ' ' + x.time) + '</span></div>';
+    h += '<div class="muted" style="font-size:12px;margin-bottom:8px">地點：' + esc(x.place || '—') + (x.geo ? ('　' + esc(x.geo)) : '') + '</div>';
+    h += mpHtml(x);
+    if (g) h += '<a class="maplink" style="margin-top:9px" href="' + g + '" target="_blank" rel="noopener">用 Google 地圖開啟</a>';
+    h += '<button class="cls" onclick="closeMapModal()">關閉</button></div>';
+    el.innerHTML = h;
+    el.style.display = 'flex';
+  }
+  function closeMapModal() { var el = document.getElementById('mpModal'); if (el) el.style.display = 'none'; }
   /* 外勤／定位異常：開 Google 地圖看實際打卡位置 */
+  var OV_LOC = [];
   function ovMapLink(x) {
     var la = Number(x.lat), ln = Number(x.lng);
-    if (!isFinite(la) || !isFinite(ln) || (!la && !ln)) return '';
-    return '<a class="maplink" href="https://www.google.com/maps/search/?api=1&query=' + la + ',' + ln +
-      '" target="_blank" rel="noopener">📍 查看打卡位置</a>';
+    var hasC = Number(x.geoLat) && Number(x.radius);
+    if ((!isFinite(la) || !isFinite(ln) || (!la && !ln)) && !hasC) return '';
+    OV_LOC.push(x);
+    return '<a class="maplink" href="javascript:void(0)" onclick="openMapModal(' + (OV_LOC.length - 1) + ')">📍 查看打卡位置</a>';
   }
   function ovPnCard(x, kind) {
     var typeTxt = (kind === 'field') ? '（外勤）' : (kind === 'geo' ? '（定位異常）' : '（補打）');
@@ -916,6 +1001,7 @@
     return h;
   }
   function renderOverview(d, isCache) {
+    OV_LOC = [];
     var w = document.getElementById('wrap');
     if (!d || !d.ok) { w.innerHTML = '<div class="card"><div class="gps err">讀取失敗：' + esc((d && d.msg) || '（無訊息）') + '</div></div>' + tabBar('overview'); return; }
     if (!d.bound) { w.innerHTML = '<div class="card"><h1>尚未綁定</h1><p class="muted">請先從打卡頁完成綁定後再使用。</p></div>' + tabBar('overview'); return; }
