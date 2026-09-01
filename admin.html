@@ -261,6 +261,18 @@
   .busy .box{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px 26px; box-shadow:0 12px 40px rgba(20,30,40,.16); display:flex; align-items:center; gap:12px; font-weight:700; font-size:14px; }
   .busy .sp{ width:20px; height:20px; border:2.5px solid var(--brand-soft); border-top-color:var(--brand); border-radius:50%; animation:spin .7s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
+  .bsp{ display:inline-block; width:12px; height:12px; margin-right:6px; vertical-align:-1px;
+    border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+  .btn .bsp,.btn.rj .bsp{ border-color:var(--brand-soft); border-top-color:var(--brand); }
+  button.bsy{ opacity:.9; cursor:default; }
+  /* 頂端載入條：所有 api() 都會亮,按下任何按鈕立刻看得到系統在跑 */
+  #ldBar{ position:fixed; top:0; left:0; right:0; height:3px; z-index:120; overflow:hidden;
+    background:var(--brand-soft); opacity:0; transition:opacity .15s; pointer-events:none; }
+  #ldBar.on{ opacity:1; }
+  #ldBar i{ display:block; height:100%; width:38%; background:var(--brand); border-radius:0 3px 3px 0;
+    animation:ldslide 1.05s cubic-bezier(.4,0,.2,1) infinite; }
+  @keyframes ldslide{ 0%{ transform:translateX(-100%); } 100%{ transform:translateX(365%); } }
+  @media (prefers-reduced-motion: reduce){ #ldBar i{ animation:none; width:100%; opacity:.6; } }
   .toast{ position:fixed; left:50%; bottom:34px; transform:translateX(-50%); background:var(--brand); color:#fff; font-weight:700; font-size:14px; padding:11px 22px; border-radius:24px; box-shadow:0 8px 26px rgba(22,163,74,.35); z-index:95; animation:tin .18s ease-out; }
   .toast.bad{ background:var(--danger); box-shadow:0 8px 26px rgba(220,38,38,.32); }
   @keyframes tin{ from{ opacity:0; transform:translate(-50%,10px); } }
@@ -412,7 +424,28 @@ function todayStr(){var d=new Date();return d.getFullYear()+'/'+p2(d.getMonth()+
 function ymDash(){ return state.ym.replace('/','-'); }
 function yy(){ return +state.ym.split('/')[0]; } function mm(){ return +state.ym.split('/')[1]; }
 
+/* 頂端載入條：api() 是唯一出口,所以每顆會連線的按鈕都自動有回饋 */
+var LOADN=0;
+function ldEl(){ var e=$('ldBar'); if(!e){ e=document.createElement('div'); e.id='ldBar'; e.innerHTML='<i></i>'; document.body.appendChild(e); } return e; }
+function ldOn(){
+  LOADN++; ldEl().classList.add('on');
+  var b=$('mOk'); if(b&&b._o==null){ b._o=b.innerHTML; b.disabled=true; b.innerHTML='<span class="bsp"></span>處理中…'; }
+}
+function ldOff(){
+  LOADN=Math.max(0,LOADN-1); if(LOADN) return;
+  ldEl().classList.remove('on');
+  var b=$('mOk'); if(b&&b._o!=null){ b.innerHTML=b._o; b._o=null; b.disabled=false; }
+}
+/* 單顆按鈕的忙碌狀態（不走 api 的動作、或想在按鈕上直接顯示時用）*/
+function bBusy(el,txt){ if(!el)return; if(el._o==null)el._o=el.innerHTML;
+  el.disabled=true; el.classList.add('bsy'); el.innerHTML='<span class="bsp"></span>'+esc(txt==null?'處理中…':txt); }
+function bDone(el,keepOff){ if(!el)return; el.disabled=!!keepOff; el.classList.remove('bsy');
+  if(el._o!=null){ el.innerHTML=el._o; el._o=null; } }
 function api(action,payload){
+  ldOn();
+  return _api(action,payload).then(function(o){ ldOff(); return o; },function(e){ ldOff(); throw e; });
+}
+function _api(action,payload){
   var body=Object.assign({action:action,token:TOKEN},payload||{});
   return fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
     .then(function(r){return r.text();}).then(function(t){ var o; try{o=JSON.parse(t);}catch(e){o={ok:false,msg:'回應格式錯誤'};}
@@ -1264,8 +1297,9 @@ function tfFillEmp(){
 }
 function tfAuto(){
   var emp=$('tfEmp').value, dt=$('tfOrig').value; if(!emp||!dt)return;
+  $('tfOAM').textContent='查詢中…'; $('tfOPM').textContent='查詢中…';
   api('admin_leaveAt',{empId:emp,date:dt.replace(/-/g,'/')}).then(function(j){
-    if(!j.ok)return;
+    if(!j.ok){ $('tfOAM').textContent='—'; $('tfOPM').textContent='—'; return; }
     $('tfOAM').textContent=j.am||'—'; $('tfOPM').textContent=j.pm||'—';
     if(j.am)$('tfNAM').value=j.am; if(j.pm)$('tfNPM').value=j.pm;
     if(!j.am&&!j.pm) alert('該日在休假登錄沒有排休,無法調休（請先排休）');
@@ -1276,10 +1310,10 @@ function submitTf(){
   var orig=$('tfOrig').value, neu=$('tfNew').value;
   if(!orig){ alert('請選原定休假日'); return; } if(!neu){ alert('請選欲調休日'); return; }
   var nam=$('tfNAM').value, npm=$('tfNPM').value; if(!nam&&!npm){ alert('請設定欲調上午/下午假別'); return; }
-  var btn=$('tfSubmit'); btn.disabled=true; btn.textContent='送出中…';
+  var btn=$('tfSubmit'); bBusy(btn,'送出中…'); busyOn('送出調休申請中…');
   api('admin_submitTransfer',{empId:emp,origDate:orig.replace(/-/g,'/'),newDate:neu.replace(/-/g,'/'),newAM:nam,newPM:npm,reason:$('tfReason').value}).then(function(j){
-    btn.disabled=false; btn.textContent='送出申請';
-    if(!j.ok){ alert(j.msg||'送出失敗'); return; } alert('已送出調休申請'); scTransfer();
+    busyOff(); bDone(btn);
+    if(!j.ok){ alert(j.msg||'送出失敗'); return; } toast('已送出調休申請'); scTransfer();
   });
 }
 function loadTransfer(){
@@ -1330,12 +1364,21 @@ function signbox(role,who){ if(who) return '<div class="sign signed"><div class=
 function unsignTf(id,stage){
   var who=(stage==='mgr'?'工地主管':'工地負責人');
   if(!confirm('確定取消【'+who+'】這一關的簽核?\n\n・若此單已核准,會一併「還原輪休表」(調休失效)\n・取消「工地負責人」時,主管那關也會一併失效\n・申請單會退回為待簽核狀態'))return;
+  busyOn('取消簽核中…');
   api('admin_unsignTransfer',{id:id,stage:stage}).then(function(j){
+    busyOff();
     if(!j.ok){ alert(j.msg||'取消失敗'); return; }
     alert('已取消【'+who+'】簽核,此單回到待簽核狀態。'); loadTransfer();
   });
 }
-function actTr(id,dec){ if(dec==='reject'&&!confirm('確定退回此調休申請?已核准者會一併還原輪休表。'))return; api('admin_actTransfer',{id:id,decision:dec}).then(function(j){ if(!j.ok)alert(j.msg||'操作失敗'); loadTransfer(); }); }
+function actTr(id,dec){
+  if(dec==='reject'&&!confirm('確定退回此調休申請?已核准者會一併還原輪休表。'))return;
+  busyOn(dec==='approve'?'核准中…':'退回中…');
+  api('admin_actTransfer',{id:id,decision:dec}).then(function(j){
+    busyOff(); if(!j.ok){ alert(j.msg||'操作失敗'); } else { toast(dec==='approve'?'已核准':'已退回'); }
+    loadTransfer();
+  });
+}
 
 /* ===================== 休假登錄 / 輪休表（矩陣） ===================== */
 function lvSym(am,pm){
@@ -1665,7 +1708,7 @@ function editPeriod(open,lock){
     '<div class="field"><label>開放登錄</label><select id="mOpen"><option value="1"'+(open?' selected':'')+'>開放（設為目前登錄期別）</option><option value="0"'+(open?'':' selected')+'>不開放</option></select></div>'+
     '<div class="field"><label>鎖定（鎖定後不可修改）</label><select id="mLock"><option value="0"'+(lock?'':' selected')+'>未鎖定</option><option value="1"'+(lock?' selected':'')+'>鎖定</option></select></div>'+
     '<div class="hint">同時只會有一個登錄期別。設為開放時,系統會自動把其他月份改為未開放,工地負責人進入「休假登錄」也會直接看到這個月。</div>',
-    function(){ api('admin_period',{set:true,year:yy(),month:mm(),open:$('mOpen').value==='1',lock:$('mLock').value==='1'}).then(function(j){ if(!j.ok){alert(j.msg||'失敗');return;} closeModal(); render(); }); });
+    function(){ busyOn('儲存中…'); api('admin_period',{set:true,year:yy(),month:mm(),open:$('mOpen').value==='1',lock:$('mLock').value==='1'}).then(function(j){ busyOff(); if(!j.ok){alert(j.msg||'失敗');return;} closeModal(); toast('已儲存'); render(); }); });
 }
 function editLeave(empId,name,day){
   if(state.roster&&state.roster.period&&state.roster.period.lock){ alert('該月已鎖定,無法修改'); return; }
@@ -1674,7 +1717,7 @@ function editLeave(empId,name,day){
     '<div class="field"><label>時段</label><select id="mSlot"><option value="全天">全天</option><option value="上午">上午</option><option value="下午">下午</option></select></div>'+
     '<div class="field"><label>假別</label><select id="mLv">'+opts+'</select></div>'+
     '<div class="hint">選「（清除）」= 取消該時段休假</div>',
-    function(){ api('admin_saveLeave',{empId:empId,date:yy()+'/'+p2(mm())+'/'+p2(day),slot:$('mSlot').value,leaveType:$('mLv').value}).then(function(j){ if(!j.ok){alert(j.msg||'失敗');return;} closeModal(); render(); }); });
+    function(){ busyOn('儲存中…'); api('admin_saveLeave',{empId:empId,date:yy()+'/'+p2(mm())+'/'+p2(day),slot:$('mSlot').value,leaveType:$('mLv').value}).then(function(j){ busyOff(); if(!j.ok){alert(j.msg||'失敗');return;} closeModal(); toast('已儲存'); render(); }); });
 }
 
 /* ===================== 出勤表（民國年 + 加班） ===================== */
@@ -1811,10 +1854,10 @@ function exportReportExcelBatch(){
 }
 function exportReportExcel(){
   var emp=$('rpEmp').value; if(!emp){ alert('請先選擇員工'); return; }
-  var btn=$('rpXls'); if(btn){btn.disabled=true;btn.textContent='產生中…';}
+  var btn=$('rpXls'); bBusy(btn,'產生中…'); busyOn('產生 Excel 中…請稍候');
   api('admin_reportExcel',{empId:emp,year:yy(),month:mm()}).then(function(j){
-    if(btn){btn.disabled=false;btn.textContent='匯出 Excel';}
-    if(!j.ok){ alert(j.msg||'匯出失敗'); return; } downloadB64(j.b64,j.filename);
+    busyOff(); bDone(btn);
+    if(!j.ok){ alert(j.msg||'匯出失敗'); return; } toast('已下載'); downloadB64(j.b64,j.filename);
   });
 }
 function rptEdit(td){ var d=td.getAttribute('data-day'), f=td.getAttribute('data-f'); if(!RPTCHG[d])RPTCHG[d]={day:Number(d)}; RPTCHG[d][f]=td.textContent.trim(); }
@@ -1970,7 +2013,8 @@ function pkCount(){ var c=document.querySelectorAll('#pkBox input:checked').leng
 function collectPeople(){ return Array.prototype.map.call(document.querySelectorAll('#pkBox input:checked'),function(i){return i.value;}).join('、'); }
 function delBase(which,idx){ var meta=BASE_META[which], row=state.base[which].rows[idx], key=row[meta.key];
   if(!confirm('確定刪除「'+key+'」?此動作無法復原'))return;
-  api('admin_deleteRow',{sheet:which,key:key}).then(function(j){ if(!j.ok){alert(j.msg||'刪除失敗');return;} baseScreen(which); });
+  busyOn('刪除中…');
+  api('admin_deleteRow',{sheet:which,key:key}).then(function(j){ busyOff(); if(!j.ok){alert(j.msg||'刪除失敗');return;} toast('已刪除'); baseScreen(which); });
 }
 
 /* ===================== 彈窗 ===================== */
