@@ -602,12 +602,13 @@ function mercX(lng,z){ return (lng+180)/360*Math.pow(2,z)*TILE; }
 function mercY(lat,z){ var r=lat*Math.PI/180; return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z)*TILE; }
 function metersPerPx(lat,z){ return 156543.03392*Math.cos(lat*Math.PI/180)/Math.pow(2,z); }
 /* 挑一個能把整個容許範圍圈裝進畫面的縮放等級 */
-function pickZoom(lat,radius,dist){
-  var need=Math.max(Number(radius)||0, Number(dist)||0)*2.4+60;      // 直徑再留點邊
+function pickZoom(lat,radius,dist,pad){
+  var need=Math.max(Number(radius)||0, Number(dist)||0)*(pad||2.4)+60;   // 倍數越大,看到的周邊越廣
   for(var z=19;z>=10;z--){ if(need/metersPerPx(lat,z)<=Math.min(MAP_W,MAP_H)) return z; }
   return 10;
 }
-function punchMapHtml(r){
+function punchMapHtml(r,opts){
+  opts=opts||{};
   var pLat=Number(r.lat), pLng=Number(r.lng);
   var cLat=Number(r.geoLat), cLng=Number(r.geoLng), rad=Number(r.radius);
   var hasP=isFinite(pLat)&&isFinite(pLng)&&(pLat||pLng);
@@ -615,7 +616,7 @@ function punchMapHtml(r){
   if(!hasP&&!hasC) return '<div class="empty">這筆沒有座標可顯示</div>';
   var aLat=hasC?cLat:pLat, aLng=hasC?cLng:pLng;                      // 以圓心為主,沒有就用打卡點
   var dist=(hasP&&hasC)?geoDist(pLat,pLng,cLat,cLng):0;
-  var z=pickZoom(aLat,hasC?rad:120,dist);
+  var z=pickZoom(aLat,hasC?rad:120,dist,opts.pad);
   // 畫面中心：圓心與打卡點的中點,兩點都看得到
   var mLat=(hasP&&hasC)?(pLat+cLat)/2:aLat, mLng=(hasP&&hasC)?(pLng+cLng)/2:aLng;
   var cx=mercX(mLng,z), cy=mercY(mLat,z);
@@ -648,10 +649,12 @@ function punchMapHtml(r){
     (hasP?'<span><i class="dot" style="background:'+((hasC&&dist>rad)?'#DC2626':'#15803D')+'"></i>員工打卡位置</span>':'')+
     ((hasP&&hasC)?('<b style="color:'+(dist<=rad?'var(--ok)':'var(--danger)')+'">距離圓心 '+Math.round(dist)+' 公尺 · '+(dist<=rad?'在範圍內':'超出範圍')+'</b>'):'')+
     '</div>';
-  var gmap=hasP?('https://www.google.com/maps/search/?api=1&query='+pLat+','+pLng):'';
+  // 有打卡點就帶打卡點,否則帶圓心（打卡座標頁用）
+  var gLa=hasP?pLat:(hasC?cLat:0), gLn=hasP?pLng:(hasC?cLng:0);
+  var gmap=(gLa||gLn)?('https://www.google.com/maps/search/?api=1&query='+gLa+','+gLn):'';
   return '<div class="mpwrap" style="width:'+MAP_W+'px;height:'+MAP_H+'px">'+tiles+svg+'</div>'+legend+
     '<div class="hint" style="margin-top:8px">圖資 © OpenStreetMap 貢獻者'+
-    (gmap?(' · <a class="maplink" href="'+gmap+'" target="_blank" rel="noopener">用 Google 地圖開啟</a>'):'')+'</div>';
+    (gmap?(' · <a class="maplink" href="'+gmap+'" target="_blank" rel="noopener">🗺 用 Google 地圖開啟這個位置</a>'):'')+'</div>';
 }
 function geoDist(la1,ln1,la2,ln2){
   var R=6371000, tr=Math.PI/180;
@@ -1668,7 +1671,7 @@ function mapThumb(lat,lng,name,radius){
 function openGeoMap(la,ln,rd,name){
   modal('打卡範圍 · '+name,
     '<div class="hint" style="margin-bottom:9px">容許半徑 <b>'+rd+'</b> 公尺　·　座標 '+la.toFixed(6)+', '+ln.toFixed(6)+'</div>'+
-    punchMapHtml({ geoLat:la, geoLng:ln, radius:rd, lat:'', lng:'' })+
+    punchMapHtml({ geoLat:la, geoLng:ln, radius:rd, lat:'', lng:'' }, { pad:4.2 })+   /* 看得到更多周邊 */
     '<div class="hint" style="margin-top:8px">綠色圈內打卡才算正常;圈外會被標記為定位異常,需負責人核准。</div>',
     function(){ closeModal(); });
 }
