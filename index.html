@@ -164,6 +164,17 @@
   .ntc-arw{ display:block; font-size:13px; margin-top:2px; }
   .ntc-bd{ display:none; padding:0 13px 13px; font-size:13.5px; line-height:1.85; color:#3b4a45; white-space:pre-wrap; border-top:1px solid var(--line); padding-top:11px; }
   .ntc-bd.open{ display:block; }
+  /* 下拉重新整理提示 */
+  #ptr{ position:fixed; left:0; right:0; top:-44px; height:44px; z-index:9996;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    font-size:12.5px; font-weight:800; color:var(--teal);
+    opacity:0; pointer-events:none; transition:opacity .15s; }
+  #ptr.show{ opacity:1; }
+  #ptr .ic{ width:15px; height:15px; border:2px solid rgba(14,124,102,.28); border-top-color:var(--teal);
+    border-radius:50%; display:inline-block; }
+  #ptr.spin .ic{ animation:ptrspin .7s linear infinite; }
+  @keyframes ptrspin{ to{ transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce){ #ptr.spin .ic{ animation:none; } }
   .mpwrap{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line); background:#e8eef0; max-width:100%; }
   .mplg{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--ink); }
   .mplg .sw{ display:inline-block; width:13px; height:13px; border-radius:4px; background:rgba(14,124,102,.3); border:1.5px solid #0E7C66; vertical-align:-2px; margin-right:4px; }
@@ -242,7 +253,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-09-01-notice-01";
+  var APP_VERSION = "2026-09-01-ptr-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -349,6 +360,74 @@
     if (ar) ar.textContent = open ? '▴' : '▾';
   }
 
+  /* ===== 下拉重新整理（各頁共用）===== */
+  var PTR = { y0: 0, dy: 0, on: false, busy: false, MAX: 96, TRIG: 62 };
+  function ptrEl() {
+    var el = document.getElementById('ptr');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'ptr';
+      el.innerHTML = '<span class="ic"></span><span class="tx"></span>';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function ptrSet(dy, txt, spin) {
+    var el = ptrEl();
+    el.style.transform = 'translateY(' + Math.round(dy) + 'px)';
+    el.querySelector('.tx').textContent = txt;
+    el.classList.toggle('spin', !!spin);
+    el.classList.toggle('show', dy > 4 || !!spin);
+  }
+  function ptrReset(animate) {
+    var el = ptrEl();
+    el.style.transition = animate ? 'transform .22s ease' : 'none';
+    ptrSet(0, '', false);
+    setTimeout(function () { el.style.transition = 'none'; }, animate ? 240 : 0);
+  }
+  /* 依目前頁面重新載入資料 */
+  function refreshCurrent(done) {
+    var v = P.view || 'punch';
+    try {
+      if (v === 'overview' || v === 'admin') startOverview();
+      else if (v === 'schedule') loadSchedule();
+      else if (v === 'notice') loadNotice();
+      else if (v === 'makeup') startMakeup();
+      else if (v === 'transfer') startTransfer();
+      else { locate(); refreshTimeState(); }        // 打卡頁：重新定位
+    } catch (e) { }
+    setTimeout(done, 700);
+  }
+  function initPullRefresh() {
+    if (window._ptrOn) return; window._ptrOn = true;
+    var sc = function () { return window.pageYOffset || document.documentElement.scrollTop || 0; };
+    document.addEventListener('touchstart', function (e) {
+      if (PTR.busy || e.touches.length !== 1 || sc() > 0) { PTR.on = false; return; }
+      PTR.on = true; PTR.y0 = e.touches[0].clientY; PTR.dy = 0;
+      ptrEl().style.transition = 'none';
+    }, { passive: true });
+    document.addEventListener('touchmove', function (e) {
+      if (!PTR.on || PTR.busy) return;
+      var d = e.touches[0].clientY - PTR.y0;
+      if (d <= 0 || sc() > 0) { PTR.dy = 0; ptrSet(0, '', false); return; }
+      e.preventDefault();                                    // 蓋掉瀏覽器自己的橡皮筋
+      PTR.dy = Math.min(PTR.MAX, d * 0.55);                  // 帶阻尼,拉起來比較自然
+      ptrSet(PTR.dy, PTR.dy >= PTR.TRIG ? '放開即可重新整理' : '下拉重新整理', false);
+    }, { passive: false });
+    document.addEventListener('touchend', function () {
+      if (!PTR.on || PTR.busy) { PTR.on = false; return; }
+      PTR.on = false;
+      if (PTR.dy < PTR.TRIG) { ptrReset(true); return; }
+      PTR.busy = true;
+      ptrEl().style.transition = 'transform .18s ease';
+      ptrSet(PTR.TRIG, '更新中…', true);
+      refreshCurrent(function () {
+        PTR.busy = false;
+        ptrReset(true);
+      });
+    }, { passive: true });
+  }
+
   function tabBar(active) {
     function tab(v, label, svg) { return '<button class="t' + (active === v ? ' on' : '') + '" onclick="navView(\'' + v + '\')">' + svg + '<span>' + label + '</span></button>'; }
     return '<div class="tabbar"><div class="tabinner">' +
@@ -369,6 +448,7 @@
     if (!p) return;
     me.userId = p.userId; me.displayName = p.displayName;
     me.idToken = liff.getIDToken();
+    initPullRefresh();
     if (P.view === 'bind') { startBindPage(); return; }
     if (P.view === 'overview' || P.view === 'admin') startOverview();
     else if (P.view === 'makeup') startMakeup();
