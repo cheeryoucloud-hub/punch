@@ -170,10 +170,6 @@
   .dayhd b{ font-size:15px; font-weight:900; color:var(--ink); }
   .dayhd span{ font-size:12.5px; color:var(--muted); }
   .dayhd i{ margin-left:auto; font-style:normal; font-size:12px; color:var(--muted); }
-  .dayhd .btn{ padding:3px 9px; font-size:11.5px; }
-  .dayhd .dayonly{ opacity:.5; transition:opacity .12s,color .12s; }   /* 平常低調,滑到才明顯 */
-  .daygrp:hover .dayonly{ opacity:1; }
-  .dayhd .dayonly:hover{ color:var(--brand); border-color:var(--brand); }
   .edited{ margin-top:3px; font-size:11px; color:var(--amber); font-weight:700; cursor:help; }
   .np-card{ display:block; background:#fff; border:1px solid #E9EDEB; border-radius:14px; padding:12px 13px; margin-bottom:10px; }
   .np-card:last-child{ margin-bottom:0; }
@@ -686,36 +682,47 @@ function delNotice(i){
   busyOn('刪除中…');
   api('admin_deleteNotice',{row:n.row}).then(function(j){ busyOff(); if(!j.ok){ toast(j.msg||'刪除失敗',true); return; } toast('已刪除'); loadNotice(); });
 }
-function todayStr(){ var d=new Date(); return d.getFullYear()+'/'+p2(d.getMonth()+1)+'/'+p2(d.getDate()); }
 
 /* ===================== 打卡明細（原始紀錄） ===================== */
-var PLOG={site:'__all__',name:'',type:'',method:'',date:''};   // date 有值 = 只看單一天
+var PLOG={site:'__all__',name:'',type:'',method:'',date:todayStr()};   // 打卡明細以「天」為單位
 var PLOG_DATA=null, PLOG_LIST=[];
 function scPunchLog(){
+  state.ym=PLOG.date.substring(0,7);            // 讓其他頁面的月份跟這天一致
   $('main').innerHTML=pageTop('打卡明細',false)+
-    '<div class="toolbar">'+mstep()+
+    '<div class="toolbar">'+plStep()+
     '<select id="plSite" onchange="plSet(\'site\',this.value)"><option value="__all__">全部工地</option></select>'+
     '<select id="plName" onchange="plSet(\'name\',this.value)"><option value="">全部人員</option></select>'+
     '<select id="plType" onchange="plSet(\'type\',this.value)">'+['','上班','下班','加班結束'].map(function(x){return '<option value="'+x+'"'+(PLOG.type===x?' selected':'')+'>'+(x||'全部類型')+'</option>';}).join('')+'</select>'+
     '<select id="plMethod" onchange="plSet(\'method\',this.value)">'+['','定點','外勤','補打'].map(function(x){return '<option value="'+x+'"'+(PLOG.method===x?' selected':'')+'>'+(x||'全部方式')+'</option>';}).join('')+'</select>'+
-    '<input type="date" id="plDate" value="'+PLOG.date.replace(/[/]/g,'-')+'" onchange="plSetDate(this.value)" title="只看某一天">'+
-    '<button class="btn" id="plAllDay" onclick="plSetDate(\'\')" style="display:'+(PLOG.date?'':'none')+'">顯示整月</button>'+
     '<span class="spacer"></span><span class="hint" id="plCount"></span></div>'+
     '<div id="plBody"><div class="panel"><div class="spin">載入中…</div></div></div>';
   loadPunchLog();
 }
 function plSet(k,v){ PLOG[k]=v; loadPunchLog(); }
-/* 只看某一天（傳空字串 = 回到整月）。挑到別的月份時,上方月份選擇器一起跳過去 */
+/* 打卡明細以「天」為單位：左右箭頭換日,點日期開月曆,「今日」跳回今天 */
+function plWk(ds){ var q=ds.split('/'); return ['日','一','二','三','四','五','六'][new Date(+q[0],+q[1]-1,+q[2]).getDay()]; }
+function plStep(){
+  var d=PLOG.date, q=d.split('/'), iso=q[0]+'-'+q[1]+'-'+q[2];
+  return '<div class="mstep"><button onclick="plShift(-1)">‹</button>'+
+    '<span class="dp" title="點我開月曆" onclick="var i=this.querySelector(\'input\'); if(i.showPicker){try{i.showPicker();}catch(e){i.focus();}}else i.focus();">'+
+      '<span class="lb" id="plLb">📅 '+esc(d)+'（'+plWk(d)+'）</span>'+
+      '<input type="date" id="plDate" value="'+iso+'" onchange="plSetDate(this.value)"></span>'+
+    '<button onclick="plShift(1)">›</button>'+
+    '<span class="now" onclick="plSetDate(todayStr())">今日</span></div>';
+}
+function plShift(n){
+  var q=PLOG.date.split('/'), dt=new Date(+q[0],+q[1]-1,+q[2]);
+  dt.setDate(dt.getDate()+n);
+  plSetDate(dt.getFullYear()+'-'+p2(dt.getMonth()+1)+'-'+p2(dt.getDate()));
+}
 function plSetDate(v){
-  PLOG.date=(v||'').replace(/-/g,'/');
-  if(PLOG.date && PLOG.date.substring(0,7)!==state.ym){ state.ym=PLOG.date.substring(0,7); scPunchLog(); return; }
-  var dt=$('plDate'); if(dt) dt.value=PLOG.date.replace(/[/]/g,'-');
-  var ab=$('plAllDay'); if(ab) ab.style.display=PLOG.date?'':'none';
+  PLOG.date=(v||todayStr()).replace(/-/g,'/');
+  state.ym=PLOG.date.substring(0,7);                    // 其他頁面的月份跟著走
+  var lb=$('plLb'); if(lb) lb.textContent='📅 '+PLOG.date+'（'+plWk(PLOG.date)+'）';
+  var inp=$('plDate'); if(inp) inp.value=PLOG.date.replace(/[/]/g,'-');
   loadPunchLog();
 }
-function plOnly(date){ plSetDate(date); }
 function loadPunchLog(){
-  if(PLOG.date && PLOG.date.substring(0,7)!==state.ym) PLOG.date='';   // 用月份選擇器換月 = 取消單日
   api('admin_punchLog',{ym:ymDash(),date:PLOG.date,site:PLOG.site,name:PLOG.name,type:PLOG.type,method:PLOG.method}).then(function(j){
     var b=$('plBody'); if(!b)return;
     if(!j.ok){ b.innerHTML='<div class="panel"><div class="empty">'+esc(j.msg||'讀取失敗')+'</div></div>'; return; }
@@ -724,16 +731,11 @@ function loadPunchLog(){
     if(ss&&ss.options.length<=1) ss.innerHTML='<option value="__all__">全部工地</option>'+(j.sites||[]).map(function(x){return '<option'+(PLOG.site===x?' selected':'')+'>'+esc(x)+'</option>';}).join('');
     var sn=$('plName');
     if(sn&&sn.options.length<=1) sn.innerHTML='<option value="">全部人員</option>'+(j.names||[]).map(function(x){return '<option'+(PLOG.name===x?' selected':'')+'>'+esc(x)+'</option>';}).join('');
-    if($('plCount')) $('plCount').textContent = j.date
-      ? (j.date+'（'+j.wk+'）共 '+j.total+' 筆')
-      : ('本月共 '+j.total+' 筆，'+j.days.length+' 天');
-    if(!j.days.length){ b.innerHTML='<div class="panel"><div class="empty">'+(j.date?(esc(j.date)+' 沒有符合條件的打卡紀錄'):'本月沒有符合條件的打卡紀錄')+'</div></div>'; return; }
+    if($('plCount')) $('plCount').textContent='共 '+j.total+' 筆';
+    if(!j.days.length){ b.innerHTML='<div class="panel"><div class="empty">這一天沒有符合條件的打卡紀錄</div></div>'; return; }
     var h='';
     j.days.forEach(function(dy){
-      h+='<div class="panel daygrp"><div class="dayhd"><b>'+esc(dy.date)+'</b><span>（'+esc(dy.wk)+'）</span>'+
-        (j.date?''                                    /* 單日模式：工具列已有「顯示整月」,這裡不重複 */
-               :'<button class="btn sm dayonly" onclick="plOnly(\''+dy.date+'\')">只看這天</button>')+
-        '<i>'+dy.items.length+' 筆</i></div>'+
+      h+='<div class="panel daygrp">'+
         '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:62px">時間</th><th style="width:84px">姓名</th><th style="width:92px">工地</th>'+
         '<th style="width:74px">類型</th><th style="width:74px">方式</th><th>地點／定位</th><th>備註</th><th style="width:78px">狀態</th>'+
         (j.canEdit?'<th class="r" style="width:108px">操作</th>':'')+'</tr></thead><tbody>';
