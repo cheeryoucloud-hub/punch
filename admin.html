@@ -579,7 +579,7 @@ function loadPunch(){
       if(PK_FILTER==='已核准')return r.status==='已核准'||r.status==='正常';
       return r.status===PK_FILTER; });
     if(!list.length){ b.innerHTML='<div class="empty">本月沒有符合條件的打卡申請</div>'; return; }
-    var h='<table class="tbl"><thead><tr><th>姓名</th><th>工地</th><th>類型</th><th>方式</th><th>日期時間</th><th>地點／定位</th><th>事由・備註</th><th>狀態</th><th>核准人</th><th class="r">審核</th></tr></thead><tbody>';
+    var h='<table class="tbl"><thead><tr><th>姓名</th><th>工地</th><th>類型</th><th>方式</th><th>日期時間</th><th>地點／定位</th><th>備註</th><th>狀態</th><th>核准人</th><th class="r">審核</th></tr></thead><tbody>';
     list.forEach(function(r){
       var st2=(r.status==='已核准')?'<span class="pill ok">已核准</span>'
              :(r.status==='正常')?'<span class="pill ok">正常</span>'
@@ -1538,7 +1538,7 @@ function openReportLeave(tr){
       var v=$('rlv').value; closeModal(); if(v==='')return;
       if(!RPTCHG[day])RPTCHG[day]={day:day};
       RPTCHG[day].leave=v;
-      if(v!=='無'){ RPTCHG[day].in=''; RPTCHG[day].out=''; RPTCHG[day].otS=''; RPTCHG[day].otE=''; }
+      if(v!=='無'){ RPTCHG[day].in=''; RPTCHG[day].out=''; RPTCHG[day].ot=''; }
       // 立即反映在畫面上
       if(v==='無'){ tr.classList.remove('lvrow'); }
       else { tr.classList.add('lvrow'); }
@@ -1555,21 +1555,21 @@ function reportHtml(j,ed){
     '<div class="rpt-co">'+esc(j.company)+'</div>'+
     '<div class="rpt-ti"><u>'+j.rocYear+'</u> 年 <u>'+p2(j.month)+'</u> 月份　出勤紀錄表</div>'+
     '<div class="rpt-meta"><span>工地別：'+esc(j.site||'')+'</span><span>姓名：'+esc(j.name)+'</span></div>'+
-    '<div class="tblwrap"><table class="att"><thead><tr><th rowspan="2" style="width:92px">出勤日期</th><th colspan="4">實際出勤時間</th><th rowspan="2" style="width:64px">狀態</th><th rowspan="2" style="width:96px">備註</th></tr>'+
-    '<tr><th>上班<br><span class="sub">(07:30~8:30)</span></th><th>下班<br><span class="sub">(16:30~17:30)</span></th><th>加班開始<br><span class="sub">(加班,需申請)</span></th><th>加班結束<br><span class="sub">(加班,需申請)</span></th></tr></thead><tbody>';
+    '<div class="tblwrap"><table class="att"><thead><tr><th rowspan="2" style="width:96px">出勤日期</th><th colspan="3">實際出勤時間</th><th rowspan="2" style="width:110px">狀態</th><th rowspan="2" style="width:190px">備註</th></tr>'+
+    '<tr><th>① 上班<br><span class="sub">(07:30~8:30)</span></th><th>② 下班<br><span class="sub">(16:30~17:30)</span></th><th>③ 加班<br><span class="sub">(需ACM申請)</span></th></tr></thead><tbody>';
   j.rows.forEach(function(r){
-    var dcell='<td class="dt">'+r.roc+'（'+r.wk+'）</td>';
+    var dcell='<td class="dt">'+r.roc+'　('+r.wk+')</td>';
     var trAttr=' data-day="'+r.day+'"'+(ed?' title="右鍵可設定假別"':'');
     if(r.leave){
-      h+='<tr class="lvrow"'+trAttr+'>'+dcell+'<td class="lv">'+esc(r.leave)+'</td><td class="lv">'+esc(r.leave)+'</td><td class="lv">'+esc(r.leave)+'</td><td class="lv">'+esc(r.leave)+'</td>'+cell(r.day,'status',r.status,'st')+cell(r.day,'note',r.note,'nt')+'</tr>';
+      h+='<tr class="lvrow"'+trAttr+'>'+dcell+'<td class="lv">'+esc(r.leave)+'</td><td class="lv">'+esc(r.leave)+'</td><td class="lv">'+esc(r.leave)+'</td>'+cell(r.day,'status',r.status,'st')+cell(r.day,'note',r.note,'nt')+'</tr>';
     } else {
-      h+='<tr'+trAttr+'>'+dcell+cell(r.day,'in',r.in)+cell(r.day,'out',r.out)+cell(r.day,'otS',r.otS)+cell(r.day,'otE',r.otE)+cell(r.day,'status',r.status,'st')+cell(r.day,'note',r.note,'nt')+'</tr>';
+      h+='<tr'+trAttr+'>'+dcell+cell(r.day,'in',r.in)+cell(r.day,'out',r.out)+cell(r.day,'ot',r.ot)+cell(r.day,'status',r.status,'st')+cell(r.day,'note',r.note,'nt')+'</tr>';
     }
   });
   h+='</tbody></table></div>'+
     '<div class="rpt-notes">'+
       '<p>註1：公司正常工作時間為每日8小時，午休時間為12:00至13:00，午休期間不計入工作時間。<br>員工得於7:30至8:30間上班，並應依實際上班時間完成每日8小時工作。例如8:10上班者，正常下班時間為17:10。</p>'+
-      '<p>註2：提早或延後打卡，系統得標示為異常紀錄。提早到場或延後離場，並不當然視為加班；但員工如有實際提供工作，仍應據實申報並由公司依法認定及處理。<br>員工完成當日工作後應即辦理下班打卡。未經核准不得於下班後繼續處理工作。單純留在工地、休息、聊天、等候交通工具或處理私人事務，不列入工作時間。</p>'+
+      '<p>註2：提早或延後打卡，系統得標示為異常紀錄。提早到場或延後離場，並不當然視為加班；但員工如有實際提供工作，仍應據實申報並由公司依法認定及處理。<br>員工完成當日工作後應即辦理下班打卡，單純留在工地、休息、聊天、等候交通工具或處理私人事務，不列入工作時間。</p>'+
       '<p>註3：因工作需要加班者，原則上應事先提出申請並經主管核准，且應記錄加班開始及結束時間。遇有緊急工作無法事先申請者，應於次一工作日補辦申請。</p>'+
       '<p>註4：本人簽名表示已核對本月份出勤、休假及加班紀錄；如有錯誤或遺漏，應於發現後向主管或人事提出更正申請。</p>'+
     '</div>'+
@@ -1611,7 +1611,7 @@ function rptEdit(td){ var d=td.getAttribute('data-day'), f=td.getAttribute('data
 function saveReport(){
   var emp=$('rpEmp').value; if(!emp){ alert('請先選員工'); return; }
   var rows=Object.keys(RPTCHG).map(function(k){return RPTCHG[k];}); if(!rows.length){ alert('沒有變更'); return; }
-  rows.forEach(function(rw){ if(rw.leave)return; ['in','out','otS','otE','status','note'].forEach(function(f){ if(rw[f]===undefined){ var td=document.querySelector('.att td[data-day="'+rw.day+'"][data-f="'+f+'"]'); if(td)rw[f]=td.textContent.trim(); } }); });
+  rows.forEach(function(rw){ if(rw.leave)return; ['in','out','ot','status','note'].forEach(function(f){ if(rw[f]===undefined){ var td=document.querySelector('.att td[data-day="'+rw.day+'"][data-f="'+f+'"]'); if(td)rw[f]=td.textContent.trim(); } }); });
   modal('儲存出勤表修正',
     '<div class="field"><label>修改原因（必填）</label><input id="rpReason" placeholder="例：漏打卡經主管確認補登、系統異常更正"></div>'+
     '<div class="hint">出勤紀錄依法須據實記載。系統會一併記錄<b>操作人、修改前原值、修改時間</b>以備查。</div>',

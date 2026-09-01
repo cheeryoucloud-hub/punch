@@ -57,6 +57,8 @@
   .pbtn:disabled{ opacity:.5; }
   .otlbl{ display:flex; align-items:center; gap:8px; margin:18px 2px 0; font-size:12px; font-weight:800; color:var(--muted); }
   .otlbl:before,.otlbl:after{ content:""; flex:1; height:1px; background:var(--line); }
+  .othint{ margin:7px 2px 0; font-size:11.5px; line-height:1.55; color:var(--muted); text-align:center; }
+  .othint b{ color:var(--amber); }
   .otbtns{ display:flex; gap:12px; margin-top:9px; }
   .otbtn{ flex:1; border:1.4px solid #d7e4df; background:#F4F8F6; color:var(--teal-d); border-radius:14px; padding:13px 0;
     font-size:15px; font-weight:800; font-family:inherit; display:flex; align-items:center; justify-content:center; gap:6px; }
@@ -191,32 +193,19 @@
     <div id="timeWarn" class="miniwarn" style="display:none"></div>
     <label class="lbl">打卡位置</label>
     <select id="siteSel" class="fld"><option>載入中…</option></select>
-    <div id="otherWrap" style="display:none">
-      <label class="lbl">地點／事由（必填）</label>
-      <input id="otherReason" class="fld" placeholder="例：送件市政府 / 拜訪業主">
-    </div>
     <div class="gpsrow"><div class="gps" id="gps">定位中…</div><button type="button" class="reloc" id="relocBtn">↻ 重新定位</button></div>
     <a id="safariBtn" class="safari" style="display:none">↗ 定位一直失敗？改用 Safari 打卡</a>
     <label class="lbl" id="noteLbl">備註（選填）</label>
     <input id="note" class="fld" placeholder="例：交通延誤，遲到 10 分">
-    <div id="lateWrap" style="display:none">
-      <label class="lbl">晚退原因（17:30 後必填）</label>
-      <select id="lateReason" class="fld" onchange="onLateReason()">
-        <option value="">請選擇原因…</option>
-        <option value="仍在工作">仍在工作（需申請加班）</option>
-        <option>等候交通</option>
-        <option>私人事務</option>
-        <option>於工務所休息</option>
-      </select>
-      <div id="lateWork" class="miniwarn" style="display:none">
-        ⚠️ 你選擇「仍在工作」。依法實際工作時間應計入加班：請按「<b>加班開始</b>」,工作結束時按「<b>加班結束</b>」（會自動一併登記下班,不用再打下班卡）。
-      </div>
+    <div id="lateWork" class="miniwarn" style="display:none">
+      ⚠️ 如有申請加班進行工作者<b>勿打下班卡</b>，請於加班開始、結束時打卡，並請記得<b>申請加班</b>。
     </div>
     <div class="punchbtns">
       <button class="pbtn in" id="btnIn" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M3 12h11"/><path d="M9 8l4 4-4 4"/></svg></span>上班</button>
       <button class="pbtn out" id="btnOut" disabled><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4"/><path d="M21 12H10"/><path d="M17 8l4 4-4 4"/></svg></span>下班</button>
     </div>
     <div class="otlbl">加班（於工地內按；「加班結束」會一併登記下班）</div>
+    <div class="othint">按「加班結束」前，請先於上方<b>備註</b>填寫加班原因（必填）。</div>
     <div class="otbtns">
       <button class="otbtn" id="btnOtIn" disabled><svg viewBox="0 0 24 24" fill="none" stroke="#0A5E4C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>加班開始</button>
       <button class="otbtn end" id="btnOtOut" disabled><svg viewBox="0 0 24 24" fill="none" stroke="#E29A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/><path d="M8 3l2 2"/></svg>加班結束</button>
@@ -231,7 +220,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-09-01-map-01";
+  var APP_VERSION = "2026-09-01-note-04";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -376,20 +365,22 @@
 
   /* ===== 打卡 ===== */
   function nowHM() { var n = new Date(); return ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2); }
-  function onLateReason() {
-    var w = document.getElementById('lateWork'), lr = document.getElementById('lateReason');
-    if (w && lr) w.style.display = (lr.value === '仍在工作') ? 'block' : 'none';
-  }
   function refreshTimeState() {
     var warn = document.getElementById('timeWarn'); if (!warn) return;
-    var lw = document.getElementById('lateWrap'), nl = document.getElementById('noteLbl'), t = nowHM();
+    var nl = document.getElementById('noteLbl'), nt = document.getElementById('note');
+    var lw = document.getElementById('lateWork'), t = nowHM();
     var early = t < '07:30', late = t > '17:30';
-    if (early) { warn.style.display = 'block'; warn.textContent = '⏰ 非正常上班時間（早到）。如有特殊原因,請於下方「備註」說明（必填）。'; }
-    else if (late) { warn.style.display = 'block'; warn.textContent = '🌙 非正常下班時間。已申請加班請打「加班結束」;未申請加班請選晚退原因並完成下班打卡。'; }
+    if (early) { warn.style.display = 'block'; warn.textContent = '⏰ 非正常上班時間（早到）。請於下方「備註」說明原因（必填）。'; }
+    else if (late) { warn.style.display = 'block'; warn.textContent = '🌙 已超過正常下班時間（17:30）。'; }
     else { warn.style.display = 'none'; }
     if (lw) lw.style.display = late ? 'block' : 'none';
-    if (!late) { var lw2 = document.getElementById('lateWork'); if (lw2) lw2.style.display = 'none'; }
-    if (nl) nl.textContent = early ? '備註（早到必填）' : '備註（選填）';
+    var fieldMode = isFieldMode();
+    if (nl) nl.textContent = fieldMode ? '備註（外勤地點／事由，必填）'
+      : (early ? '備註（早到必填）'
+      : (late ? '備註（請寫加班原因，並記得於 ACM 系統申請）' : '備註（選填）'));
+    if (nt) nt.placeholder = fieldMode ? '例：送件市政府 / 拜訪業主'
+      : (early ? '例：提早到工地準備機具'
+      : (late ? '例：配合灌漿加班' : '例：交通延誤，遲到 10 分'));
   }
   function startClock() {
     function tick() { var el = document.getElementById('clock'); if (el) { var n = new Date(); el.textContent = ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2); } refreshTimeState(); }
@@ -444,10 +435,11 @@
     updateOther();
     if (gpsDone) ready();
   }
-  function updateOther() {
-    document.getElementById('otherWrap').style.display =
-      (document.getElementById('siteSel').value === '__other__') ? 'block' : 'none';
+  function isFieldMode() {
+    var sel = document.getElementById('siteSel');
+    return !!sel && sel.value === '__other__';
   }
+  function updateOther() { refreshTimeState(); }   // 外勤與否會改變備註欄的標題/必填
   function findSiteByName(c) { for (var i = 0; i < sitesData.length; i++) if (sitesData[i].name === c) return sitesData[i]; return null; }
   function setGps(txt, cls) { var el = document.getElementById('gps'); if (el) { el.textContent = txt; el.className = 'gps' + (cls ? ' ' + cls : ''); } }
   function ready() { ['btnIn','btnOut','btnOtIn','btnOtOut'].forEach(function(id){ var b=document.getElementById(id); if(b)b.disabled=false; }); }
@@ -472,20 +464,13 @@
   function punch(type) {
     var sel = document.getElementById('siteSel');
     var isOther = (sel.value === '__other__');
-    var reason = isOther ? document.getElementById('otherReason').value.trim() : '';
-    if (isOther && !reason) { alert('請輸入地點／事由'); return; }
     var note = document.getElementById('note').value.trim();
     var t = nowHM();
-    if (type === '上班' && t < '07:30' && !note) { alert('非正常上班時間（早到）,請於「備註」說明原因'); var ne = document.getElementById('note'); if (ne) ne.focus(); return; }
-    if (type === '下班' && t > '17:30') {
-      var lr = document.getElementById('lateReason'); var v = lr ? lr.value : '';
-      if (!v) { alert('非正常下班時間,請先選擇「晚退原因」'); return; }
-      if (v === '仍在工作') {
-        alert('你選擇「仍在工作」。\n\n實際工作時間依法應計入加班,請改按「加班開始／加班結束」完成加班打卡。\n若已結束加班,請先打「加班結束」再打下班卡。');
-        return;
-      }
-      note = note ? (v + '；' + note) : v;
-    }
+    var ne = document.getElementById('note');
+    if (isOther && !note) { alert('外勤打卡請於「備註」填寫地點／事由'); if (ne) ne.focus(); return; }
+    if (type === '上班' && t < '07:30' && !note) { alert('非正常上班時間（早到）,請於「備註」說明原因'); if (ne) ne.focus(); return; }
+    if (type === '加班結束' && !note) { alert('請於「備註」填寫加班原因'); if (ne) ne.focus(); return; }
+    var reason = isOther ? note : '';                 // 外勤：備註即為事由（用來組成打卡地點）
     var site = '', siteName = '';
     if (!isOther) { var s = findSiteByName(sel.value); site = s ? s.name : sel.value; siteName = s ? s.name : ''; }
     punchCtx = { type: type, note: note };
@@ -989,7 +974,7 @@
     return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
       '<div class="muted">' + esc(x.date + ' ' + x.time + '　' + x.punchType) + typeTxt + '</div>' +
       loc +
-      (x.reason ? '<div class="muted">事由：' + esc(x.reason) + '</div>' : '') +
+      (x.reason ? '<div class="muted">備註：' + esc(x.reason) + '</div>' : '') +
       ovActions('punch', x.recordId, x.canAct) + '</div>';
   }
   function ovSection(title, kind, list) {
