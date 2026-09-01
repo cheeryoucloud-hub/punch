@@ -154,6 +154,17 @@
   .rnote{ margin-top:11px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
   .rnote b{ display:block; font-size:12px; color:var(--brand); font-weight:800; margin-bottom:5px; }
   .rnote p{ font-size:12px; color:var(--ink); line-height:1.62; white-space:pre-line; margin:0; }
+  .ntc{ background:#fff; border:1px solid var(--line); border-radius:14px; margin-bottom:10px; overflow:hidden; }
+  .ntc.top{ border-color:#F0D9A8; box-shadow:0 0 0 1px #F7E7C4 inset; }
+  .ntc-hd{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; padding:12px 13px; cursor:pointer; }
+  .ntc-tag{ color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:7px; white-space:nowrap; }
+  .ntc-ti{ font-size:14.5px; font-weight:800; color:var(--ink); line-height:1.45; }
+  .ntc-pin{ font-style:normal; font-size:10.5px; font-weight:800; color:#B7791F; background:#FDF3E0; border-radius:5px; padding:2px 6px; margin-left:6px; }
+  .ntc-new{ font-style:normal; font-size:10.5px; font-weight:800; color:#fff; background:#C0392B; border-radius:5px; padding:2px 6px; margin-left:6px; }
+  .ntc-dt{ font-size:11.5px; color:var(--muted); white-space:nowrap; text-align:right; }
+  .ntc-arw{ display:block; font-size:13px; margin-top:2px; }
+  .ntc-bd{ display:none; padding:0 13px 13px; font-size:13.5px; line-height:1.85; color:#3b4a45; white-space:pre-wrap; border-top:1px solid var(--line); padding-top:11px; }
+  .ntc-bd.open{ display:block; }
   .mpwrap{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line); background:#e8eef0; max-width:100%; }
   .mplg{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--ink); }
   .mplg .sw{ display:inline-block; width:13px; height:13px; border-radius:4px; background:rgba(14,124,102,.3); border:1.5px solid #0E7C66; vertical-align:-2px; margin-right:4px; }
@@ -232,7 +243,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-09-01-ot-03";
+  var APP_VERSION = "2026-09-01-notice-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -285,14 +296,66 @@
     makeup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
     transfer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h11l-2-2M20 17H9l2 2"/></svg>',
     schedule: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>',
+    notice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>',
     overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>'
   };
+  /* ===== 公司公告（需已綁定 LINE 才看得到）===== */
+  var NTC_COLOR = { '一般公告': '#6B7A72', '人事': '#2F6BD8', '工安': '#E29A2E', '活動': '#0E7C66', '緊急': '#C0392B' };
+  function startNotice() {
+    var w = document.getElementById('wrap');
+    w.innerHTML = '<h1>公司公告</h1><div class="date" id="ntcWho">啓宇營造</div>' +
+      '<div id="ntcBody"><div class="muted" style="text-align:center;padding:22px">載入中…</div></div>' + tabBar('notice');
+    loadNotice();
+  }
+  function loadNotice() {
+    var ck = 'ntc';
+    var cached = lcGet(ck);
+    if (cached) renderNotice(cached);
+    post({ action: 'notices', idToken: me.idToken })
+      .then(function (r) { if (r && r.ok) lcSet(ck, r); renderNotice(r); })
+      .catch(function (e) { document.getElementById('ntcBody').innerHTML = '<div class="muted" style="text-align:center;padding:22px">讀取失敗：' + esc(e) + '</div>'; });
+  }
+  function renderNotice(res) {
+    var b = document.getElementById('ntcBody'); if (!b) return;
+    if (!res || !res.ok) { b.innerHTML = '<div class="card"><div class="gps err">讀取失敗：' + esc((res && res.msg) || '') + '</div></div>'; return; }
+    if (!res.bound) {
+      b.innerHTML = '<div class="card"><h1 style="font-size:17px">尚未綁定</h1>' +
+        '<p class="muted" style="margin:8px 0 0;line-height:1.7">公司公告只開放給已綁定的同仁。請先到「打卡」頁完成首次綁定，再回來查看。</p></div>';
+      return;
+    }
+    var who = document.getElementById('ntcWho');
+    if (who) who.textContent = esc(res.name) + ' · 公司公告';
+    var items = res.items || [];
+    if (!items.length) { b.innerHTML = '<div class="empty">目前沒有公告</div>'; return; }
+    var h = '';
+    items.forEach(function (n, i) {
+      var col = NTC_COLOR[n.cat] || '#6B7A72';
+      h += '<div class="ntc' + (n.top ? ' top' : '') + '">' +
+        '<div class="ntc-hd" onclick="ntcToggle(' + i + ')">' +
+        '<div class="ntc-tag" style="background:' + col + '">' + esc(n.cat) + '</div>' +
+        '<div class="ntc-ti">' + esc(n.title) +
+        (n.top ? '<i class="ntc-pin">置頂</i>' : '') + (n.isNew ? '<i class="ntc-new">NEW</i>' : '') + '</div>' +
+        '<div class="ntc-dt">' + esc(n.date) + '<span class="ntc-arw" id="ntcA' + i + '">▾</span></div>' +
+        '</div>' +
+        '<div class="ntc-bd" id="ntcB' + i + '">' + esc(n.body || '（無內容）') + '</div>' +
+        '</div>';
+    });
+    b.innerHTML = h;
+    if (items.length) ntcToggle(0);          // 第一則預設展開
+  }
+  function ntcToggle(i) {
+    var bd = document.getElementById('ntcB' + i), ar = document.getElementById('ntcA' + i);
+    if (!bd) return;
+    var open = bd.classList.toggle('open');
+    if (ar) ar.textContent = open ? '▴' : '▾';
+  }
+
   function tabBar(active) {
     function tab(v, label, svg) { return '<button class="t' + (active === v ? ' on' : '') + '" onclick="navView(\'' + v + '\')">' + svg + '<span>' + label + '</span></button>'; }
     return '<div class="tabbar"><div class="tabinner">' +
       tab('punch', '打卡', ICON.punch) + tab('makeup', '補打卡', ICON.makeup) +
       tab('transfer', '調休', ICON.transfer) + tab('schedule', '班表', ICON.schedule) +
-      tab('overview', '概覽', ICON.overview) + '</div></div>';
+      tab('overview', '概覽', ICON.overview) + tab('notice', '公告', ICON.notice) + '</div></div>';
   }
   function navView(v) {
     var cur = P.view || 'punch';
@@ -312,6 +375,7 @@
     else if (P.view === 'makeup') startMakeup();
     else if (P.view === 'transfer') startTransfer();
     else if (P.view === 'schedule') startSchedule();
+    else if (P.view === 'notice') startNotice();
     else startPunch();
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
