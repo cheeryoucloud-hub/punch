@@ -154,6 +154,10 @@
   .rnote{ margin-top:11px; background:#fff; border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
   .rnote b{ display:block; font-size:12px; color:var(--brand); font-weight:800; margin-bottom:5px; }
   .rnote p{ font-size:12px; color:var(--ink); line-height:1.62; white-space:pre-line; margin:0; }
+  .ntc-bar{ display:flex; align-items:center; justify-content:space-between; margin:0 2px 10px; }
+  .ntc-cnt{ font-size:12px; color:var(--muted); font-weight:700; }
+  .ntc-all{ border:1px solid var(--line); background:#fff; color:var(--teal); font-family:inherit;
+    font-size:12.5px; font-weight:800; padding:7px 13px; border-radius:10px; }
   .ntc{ background:#fff; border:1px solid var(--line); border-radius:14px; margin-bottom:10px; overflow:hidden; }
   .ntc.top{ border-color:#F0D9A8; box-shadow:0 0 0 1px #F7E7C4 inset; }
   .ntc-hd{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; padding:12px 13px; cursor:pointer; }
@@ -253,7 +257,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-09-01-ptr-01";
+  var APP_VERSION = "2026-09-01-ptr-02";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -350,14 +354,34 @@
         '<div class="ntc-bd" id="ntcB' + i + '">' + esc(n.body || '（無內容）') + '</div>' +
         '</div>';
     });
-    b.innerHTML = h;
+    b.innerHTML = '<div class="ntc-bar"><span class="ntc-cnt">共 ' + items.length + ' 則</span>' +
+      '<button type="button" class="ntc-all" id="ntcAll" onclick="ntcToggleAll()">全部展開</button></div>' + h;
     if (items.length) ntcToggle(0);          // 第一則預設展開
+    ntcSyncAll();
   }
   function ntcToggle(i) {
     var bd = document.getElementById('ntcB' + i), ar = document.getElementById('ntcA' + i);
     if (!bd) return;
     var open = bd.classList.toggle('open');
     if (ar) ar.textContent = open ? '▴' : '▾';
+    ntcSyncAll();
+  }
+  /* 一鍵全部展開 / 全部摺疊 */
+  function ntcToggleAll() {
+    var bds = document.querySelectorAll('.ntc-bd');
+    var allOpen = bds.length > 0 && document.querySelectorAll('.ntc-bd.open').length === bds.length;
+    Array.prototype.forEach.call(bds, function (bd, i) {
+      bd.classList.toggle('open', !allOpen);
+      var ar = document.getElementById('ntcA' + i);
+      if (ar) ar.textContent = allOpen ? '▾' : '▴';
+    });
+    ntcSyncAll();
+  }
+  function ntcSyncAll() {
+    var btn = document.getElementById('ntcAll'); if (!btn) return;
+    var bds = document.querySelectorAll('.ntc-bd');
+    var allOpen = bds.length > 0 && document.querySelectorAll('.ntc-bd.open').length === bds.length;
+    btn.textContent = allOpen ? '全部摺疊' : '全部展開';
   }
 
   /* ===== 下拉重新整理（各頁共用）===== */

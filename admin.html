@@ -165,6 +165,12 @@
   table.roster td.rcell,table.roster td.sumc{ position:relative; }
   /* 公告的員工端預覽（模擬 LINE 卡片樣式）*/
   .ntcprev{ background:#F3F5F4; border:1px solid var(--line); border-radius:14px; padding:12px; max-height:56vh; overflow:auto; }
+  .daygrp{ margin-bottom:14px; }
+  .dayhd{ display:flex; align-items:baseline; gap:8px; padding:2px 2px 12px; }
+  .dayhd b{ font-size:15px; font-weight:900; color:var(--ink); }
+  .dayhd span{ font-size:12.5px; color:var(--muted); }
+  .dayhd i{ margin-left:auto; font-style:normal; font-size:12px; color:var(--muted); }
+  .edited{ margin-top:3px; font-size:11px; color:var(--amber); font-weight:700; cursor:help; }
   .np-card{ display:block; background:#fff; border:1px solid #E9EDEB; border-radius:14px; padding:12px 13px; margin-bottom:10px; }
   .np-card:last-child{ margin-bottom:0; }
   .np-card.top{ border-color:#F0D9A8; box-shadow:0 0 0 1px #F7E7C4 inset; }
@@ -646,50 +652,102 @@ function delNotice(i){
 function todayStr(){ var d=new Date(); return d.getFullYear()+'/'+p2(d.getMonth()+1)+'/'+p2(d.getDate()); }
 
 /* ===================== 打卡明細（原始紀錄） ===================== */
-var PLOG={name:'',type:'',method:''};
+var PLOG={site:'__all__',name:'',type:'',method:''};
+var PLOG_DATA=null, PLOG_LIST=[];
 function scPunchLog(){
   $('main').innerHTML=pageTop('打卡明細',false)+
     '<div class="toolbar">'+mstep()+
+    '<select id="plSite" onchange="plSet(\'site\',this.value)"><option value="__all__">全部工地</option></select>'+
     '<select id="plName" onchange="plSet(\'name\',this.value)"><option value="">全部人員</option></select>'+
     '<select id="plType" onchange="plSet(\'type\',this.value)">'+['','上班','下班','加班結束'].map(function(x){return '<option value="'+x+'"'+(PLOG.type===x?' selected':'')+'>'+(x||'全部類型')+'</option>';}).join('')+'</select>'+
     '<select id="plMethod" onchange="plSet(\'method\',this.value)">'+['','定點','外勤','補打'].map(function(x){return '<option value="'+x+'"'+(PLOG.method===x?' selected':'')+'>'+(x||'全部方式')+'</option>';}).join('')+'</select>'+
     '<span class="spacer"></span><span class="hint" id="plCount"></span></div>'+
-    '<div class="panel"><div class="tblwrap" id="plBody"><div class="spin">載入中…</div></div></div>';
+    '<div id="plBody"><div class="panel"><div class="spin">載入中…</div></div></div>';
   loadPunchLog();
 }
 function plSet(k,v){ PLOG[k]=v; loadPunchLog(); }
 function loadPunchLog(){
-  api('admin_punchLog',{ym:ymDash(),name:PLOG.name,type:PLOG.type,method:PLOG.method}).then(function(j){
+  api('admin_punchLog',{ym:ymDash(),site:PLOG.site,name:PLOG.name,type:PLOG.type,method:PLOG.method}).then(function(j){
     var b=$('plBody'); if(!b)return;
-    if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
-    var sel=$('plName');
-    if(sel&&sel.options.length<=1){
-      sel.innerHTML='<option value="">全部人員</option>'+(j.names||[]).map(function(n){return '<option'+(PLOG.name===n?' selected':'')+'>'+esc(n)+'</option>';}).join('');
-    }
-    if($('plCount')) $('plCount').textContent='本月共 '+j.list.length+' 筆';
-    if(!j.list.length){ b.innerHTML='<div class="empty">本月沒有符合條件的打卡紀錄</div>'; return; }
-    PLOG_LIST=j.list;
-    var h='<table class="tbl"><thead><tr><th style="width:132px">打卡時間</th><th style="width:84px">姓名</th><th style="width:92px">工地</th><th style="width:74px">類型</th><th style="width:74px">方式</th><th>地點／定位</th><th>備註</th><th style="width:78px">狀態</th></tr></thead><tbody>';
-    j.list.forEach(function(r,i){
-      var mcls=(r.method==='外勤')?'info':((r.method==='補打')?'wait':'mut');
-      var loc=esc(r.place||'—');
-      if(r.geo==='超出範圍'||r.geo==='無定位') loc+=' <span class="pill bad" style="font-size:10px">'+esc(r.geo)+(r.dist?('・'+esc(r.dist)+'m'):'')+'</span>';
-      if(r.lat&&r.lng) loc+=' <a class="maplink" href="javascript:void(0)" onclick="openLogMap('+i+')">📍</a>';
-      var st=(r.status==='正常'||r.status==='已核准')?'<span class="pill ok">'+esc(r.status)+'</span>'
-            :(r.status==='已退回')?'<span class="pill bad">已退回</span>':'<span class="pill wait">'+esc(r.status||'—')+'</span>';
-      h+='<tr><td class="tnum">'+esc(r.dt)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td>'+
-        '<td>'+esc(r.type)+'</td><td><span class="pill '+mcls+'">'+esc(r.method)+'</span></td>'+
-        '<td class="muted" style="font-size:12px">'+loc+'</td><td class="muted">'+esc(r.note||'—')+'</td><td>'+st+'</td></tr>';
+    if(!j.ok){ b.innerHTML='<div class="panel"><div class="empty">'+esc(j.msg||'讀取失敗')+'</div></div>'; return; }
+    PLOG_DATA=j; PLOG_LIST=[];
+    var ss=$('plSite');
+    if(ss&&ss.options.length<=1) ss.innerHTML='<option value="__all__">全部工地</option>'+(j.sites||[]).map(function(x){return '<option'+(PLOG.site===x?' selected':'')+'>'+esc(x)+'</option>';}).join('');
+    var sn=$('plName');
+    if(sn&&sn.options.length<=1) sn.innerHTML='<option value="">全部人員</option>'+(j.names||[]).map(function(x){return '<option'+(PLOG.name===x?' selected':'')+'>'+esc(x)+'</option>';}).join('');
+    if($('plCount')) $('plCount').textContent='本月共 '+j.total+' 筆，'+j.days.length+' 天';
+    if(!j.days.length){ b.innerHTML='<div class="panel"><div class="empty">本月沒有符合條件的打卡紀錄</div></div>'; return; }
+    var h='';
+    j.days.forEach(function(dy){
+      h+='<div class="panel daygrp"><div class="dayhd"><b>'+esc(dy.date)+'</b><span>（'+esc(dy.wk)+'）</span><i>'+dy.items.length+' 筆</i></div>'+
+        '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:62px">時間</th><th style="width:84px">姓名</th><th style="width:92px">工地</th>'+
+        '<th style="width:74px">類型</th><th style="width:74px">方式</th><th>地點／定位</th><th>備註</th><th style="width:78px">狀態</th>'+
+        (j.canEdit?'<th class="r" style="width:108px">操作</th>':'')+'</tr></thead><tbody>';
+      dy.items.forEach(function(r){
+        var i=PLOG_LIST.length; PLOG_LIST.push(r);
+        var mcls=(r.method==='外勤')?'info':((r.method==='補打')?'wait':'mut');
+        var loc=esc(r.place||'—');
+        if(r.geo==='超出範圍'||r.geo==='無定位') loc+=' <span class="pill bad" style="font-size:10px">'+esc(r.geo)+(r.dist?('・'+esc(r.dist)+'m'):'')+'</span>';
+        if(r.lat&&r.lng) loc+=' <a class="maplink" href="javascript:void(0)" onclick="openLogMap('+i+')">📍</a>';
+        var st=(r.status==='正常'||r.status==='已核准')?'<span class="pill ok">'+esc(r.status)+'</span>'
+              :(r.status==='已退回')?'<span class="pill bad">已退回</span>':'<span class="pill wait">'+esc(r.status||'—')+'</span>';
+        var note=esc(r.note||'—');
+        if(r.editor) note+='<div class="edited" title="'+esc(r.editReason||'')+'">✎ '+esc(r.editor)+' 於 '+esc(r.editAt)+' 修改</div>';
+        h+='<tr><td class="tnum">'+esc(r.time)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td>'+
+          '<td>'+esc(r.type)+'</td><td><span class="pill '+mcls+'">'+esc(r.method)+'</span></td>'+
+          '<td class="muted" style="font-size:12px">'+loc+'</td><td class="muted">'+note+'</td><td>'+st+'</td>'+
+          (j.canEdit?('<td class="r"><div class="actions"><button class="btn sm" onclick="editPunchRow('+i+')">編輯</button><button class="btn rj sm" onclick="delPunchRow('+i+')">刪</button></div></td>'):'')+
+          '</tr>';
+      });
+      h+='</tbody></table></div></div>';
     });
-    b.innerHTML=h+'</tbody></table>';
+    b.innerHTML=h;
   });
 }
-var PLOG_LIST=[];
 function openLogMap(i){
   var r=PLOG_LIST[i]; if(!r)return;
   modal('打卡位置 · '+r.name+'（'+r.dt+'）',
     '<div class="hint" style="margin-bottom:9px">地點：'+esc(r.place||'—')+(r.geo?('　定位結果：'+esc(r.geo)):'')+'</div>'+
     punchMapHtml(r), function(){ closeModal(); });
+}
+function selOpts(list,cur){ return list.map(function(x){ return '<option'+(String(cur)===x?' selected':'')+'>'+esc(x)+'</option>'; }).join(''); }
+function editPunchRow(i){
+  var r=PLOG_LIST[i]; if(!r)return;
+  modal('修改打卡紀錄 · '+r.name,
+    '<div class="row2"><div class="field"><label>打卡時間（yyyy/MM/dd HH:mm）</label><input id="eDt" value="'+esc(r.dt)+'"></div>'+
+    '<div class="field"><label>類型</label><select id="eType">'+selOpts(['上班','下班','加班開始','加班結束'],r.type)+'</select></div></div>'+
+    '<div class="row2"><div class="field"><label>方式</label><select id="eMethod">'+selOpts(['定點','外勤','補打'],r.method)+'</select></div>'+
+    '<div class="field"><label>定位結果</label><select id="eGeo">'+selOpts(['正常','超出範圍','無定位','外勤','補打'],r.geo)+'</select></div></div>'+
+    '<div class="row2"><div class="field"><label>打卡地點</label><input id="ePlace" value="'+esc(r.place)+'"></div>'+
+    '<div class="field"><label>狀態</label><select id="eStatus">'+selOpts(['正常','待核准','已核准','已退回'],r.status)+'</select></div></div>'+
+    '<div class="field"><label>備註</label><input id="eNote" value="'+esc(r.note)+'"></div>'+
+    '<div class="field"><label>修改原因（必填）</label><input id="eReason" placeholder="例：員工反映時間有誤，經主管確認後更正"></div>'+
+    '<div class="hint">出勤紀錄依法須據實記載。系統會記錄<b>修改人、修改時間、修改前原值</b>以備查。</div>',
+    function(){
+      var reason=($('eReason').value||'').trim();
+      if(!reason){ toast('請填寫修改原因',true); return; }
+      busyOn('儲存中…');
+      api('admin_savePunchRow',{id:r.id,dt:$('eDt').value.trim(),type:$('eType').value,method:$('eMethod').value,
+        geo:$('eGeo').value,place:$('ePlace').value,status:$('eStatus').value,note:$('eNote').value,reason:reason}).then(function(j){
+        busyOff(); if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
+        closeModal(); toast('已更新'); loadPunchLog();
+      });
+    });
+}
+function delPunchRow(i){
+  var r=PLOG_LIST[i]; if(!r)return;
+  modal('刪除打卡紀錄',
+    '<div class="hint" style="margin-bottom:10px">將刪除 <b>'+esc(r.name)+'</b> 於 <b>'+esc(r.dt)+'</b> 的「'+esc(r.type)+'」紀錄，此動作無法復原。</div>'+
+    '<div class="field"><label>刪除原因（必填）</label><input id="dReason" placeholder="例：重複打卡，保留較早的一筆"></div>',
+    function(){
+      var reason=($('dReason').value||'').trim();
+      if(!reason){ toast('請填寫刪除原因',true); return; }
+      busyOn('刪除中…');
+      api('admin_deletePunchRow',{id:r.id,reason:reason}).then(function(j){
+        busyOff(); if(!j.ok){ toast(j.msg||'刪除失敗',true); return; }
+        closeModal(); toast('已刪除'); loadPunchLog();
+      });
+    });
 }
 
 /* ===================== 打卡申請 ===================== */
