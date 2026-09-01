@@ -55,6 +55,10 @@
   .pbtn.in{ background:var(--teal); color:#fff; box-shadow:0 9px 18px rgba(14,124,102,.26); }
   .pbtn.out{ background:#fff; color:var(--amber); border:1.6px solid #F0D9AC; }
   .pbtn:disabled{ opacity:.5; }
+  .nomobile{ background:#FFF6E8; border:1px solid #F0D9AC; border-radius:14px; padding:14px 16px;
+    font-size:13.5px; line-height:1.85; color:var(--ink); margin-top:4px; }
+  .nomobile b{ color:var(--amber); }
+  .nomobile .sub{ display:block; margin-top:7px; font-size:12.5px; color:var(--muted); }
   .otlbl{ display:flex; align-items:center; gap:8px; margin:18px 2px 0; font-size:12px; font-weight:800; color:var(--muted); }
   .otlbl:before,.otlbl:after{ content:""; flex:1; height:1px; background:var(--line); }
   .othint{ margin:7px 2px 0; font-size:11.5px; line-height:1.55; color:var(--muted); text-align:center; }
@@ -267,10 +271,11 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
   var LIFF_ID = "2011018188-xd2VsV0A";                                   // ← LINE Login 沿用舊的即可
+  var MOBILE_ONLY = true;   // true = 只有「手機的 LINE App」裡才能按打卡（補打卡/班表/概覽等不受限）
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-09-01-btnfb-01";
+  var APP_VERSION = "2026-09-02-mobonly-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -493,6 +498,24 @@
     location.href = location.pathname + (v === 'punch' ? '' : ('?view=' + v));
   }
 
+  /* 執行環境：只有手機 LINE App 內才算 mobile。
+     ・isInClient() false = 外部瀏覽器（不管手機還是電腦）
+     ・getOS() 回 web    = LINE 桌機版
+     兩層都過才放行,再用 UA 收尾。 */
+  var ENV = { inLine: false, os: "", ua: "", mobile: false };
+  function envDetect() {
+    try { ENV.inLine = !!(window.liff && liff.isInClient && liff.isInClient()); } catch (e) { }
+    try { ENV.os = (window.liff && liff.getOS) ? (liff.getOS() || "") : ""; } catch (e) { }
+    ENV.ua = String(navigator.userAgent || "").substring(0, 180);
+    // 只用 LIFF 自己的兩個訊號判斷（UA 只留做紀錄）：
+    // UA 各家改寫太多,拿它當條件會誤擋到真的在用手機的人,那比放過一台電腦嚴重。
+    ENV.mobile = ENV.inLine && (ENV.os === "ios" || ENV.os === "android");
+  }
+  function envWhy() {
+    if (!ENV.inLine) return "目前是用瀏覽器開啟";
+    if (ENV.os === "web") return "目前是用 LINE 電腦版開啟";
+    return "目前的裝置無法辨識為手機";
+  }
   liff.init({ liffId: LIFF_ID }).then(function () {
     if (!liff.isLoggedIn()) { liff.login(); return; }
     return liff.getProfile();
@@ -500,6 +523,7 @@
     if (!p) return;
     me.userId = p.userId; me.displayName = p.displayName;
     me.idToken = liff.getIDToken();
+    envDetect();
     initPullRefresh();
     if (P.view === 'bind') { startBindPage(); return; }
     if (P.view === 'overview' || P.view === 'admin') startOverview();
@@ -573,6 +597,28 @@
   }
 
   /* ===== 打卡 ===== */
+  /* 非手機環境：收起打卡鈕,改說明怎麼做（補打卡等其他功能照常可用）*/
+  function blockPunchUI() {
+    ['btnIn', 'btnOut', 'btnOtOut'].forEach(function (id) {
+      var b = document.getElementById(id); if (b) { b.disabled = true; b.style.display = 'none'; }
+    });
+    var box = document.querySelector('.punchbtns');
+    if (box) box.insertAdjacentHTML('afterend',
+      '<div class="nomobile">📱 <b>打卡請用手機</b><br>' +
+      '為確保打卡地點正確，只有在<b>手機的 LINE App</b> 裡才能打卡（' + esc(envWhy()) + '）。<br>' +
+      '請在手機打開 LINE，從圖文選單進入打卡頁。<br>' +
+      '<span class="sub">忘記打卡可改用下方「補打卡」提出申請，班表、出勤概覽、公告在這裡都能正常看。</span></div>');
+    var ot = document.querySelector('.otlbl'), ob = document.querySelector('.otbtns');
+    if (ot) ot.style.display = 'none';
+    if (ob) ob.style.display = 'none';
+    var on = document.getElementById('otNote'), oh = document.querySelector('.othint');
+    if (oh) oh.style.display = 'none';
+    if (on) {
+      var lbl = on.previousElementSibling;                 // 「加班原因」那行 label 沒有 for,用前一個節點抓
+      if (lbl && lbl.tagName === 'LABEL') lbl.style.display = 'none';
+      on.style.display = 'none';
+    }
+  }
   function nowHM() { var n = new Date(); return ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2); }
   function refreshTimeState() {
     var warn = document.getElementById('timeWarn'); if (!warn) return;
@@ -609,6 +655,7 @@
     document.getElementById('btnOut').onclick = function () { punch('下班', this); };
     document.getElementById('btnOtOut').onclick = function () { punch('加班結束', this); };
     document.getElementById('relocBtn').onclick = function () { locate(); };
+    if (MOBILE_ONLY && !ENV.mobile) blockPunchUI();
     w.insertAdjacentHTML('beforeend', tabBar('punch'));
     locate();
     loadSites();
@@ -703,7 +750,7 @@
     ['btnIn','btnOut','btnOtOut'].forEach(function(id){ var b=document.getElementById(id); if(b)b.disabled=true; });
     bBusy(PBTN, '送出中…'); ovBusy('打卡送出中…請稍候');
     post({ action: 'punch', idToken: me.idToken, userId: me.userId, displayName: me.displayName, mode: isOther ? 'field' : '', site: site, siteName: siteName,
-           punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, note: note, device: navigator.platform + ' / LINE' })
+           punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, note: note, device: navigator.platform + ' / LINE', env: ENV })
       .then(onDone).catch(function (e) { showResult(false, '送出失敗：' + e); ready(); });
   }
   function onDone(res) {
