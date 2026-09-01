@@ -159,7 +159,6 @@
   .ntc-hd{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; padding:12px 13px; cursor:pointer; }
   .ntc-tag{ color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:7px; white-space:nowrap; }
   .ntc-ti{ font-size:14.5px; font-weight:800; color:var(--ink); line-height:1.45; }
-  .ntc-pin{ font-style:normal; font-size:10.5px; font-weight:800; color:#B7791F; background:#FDF3E0; border-radius:5px; padding:2px 6px; margin-left:6px; }
   .ntc-new{ font-style:normal; font-size:10.5px; font-weight:800; color:#fff; background:#C0392B; border-radius:5px; padding:2px 6px; margin-left:6px; }
   .ntc-dt{ font-size:11.5px; color:var(--muted); white-space:nowrap; text-align:right; }
   .ntc-arw{ display:block; font-size:13px; margin-top:2px; }
@@ -334,7 +333,7 @@
         '<div class="ntc-hd" onclick="ntcToggle(' + i + ')">' +
         '<div class="ntc-tag" style="background:' + col + '">' + esc(n.cat) + '</div>' +
         '<div class="ntc-ti">' + esc(n.title) +
-        (n.top ? '<i class="ntc-pin">置頂</i>' : '') + (n.isNew ? '<i class="ntc-new">NEW</i>' : '') + '</div>' +
+        (n.isNew ? '<i class="ntc-new">NEW</i>' : '') + '</div>' +
         '<div class="ntc-dt">' + esc(n.date) + '<span class="ntc-arw" id="ntcA' + i + '">▾</span></div>' +
         '</div>' +
         '<div class="ntc-bd" id="ntcB' + i + '">' + esc(n.body || '（無內容）') + '</div>' +

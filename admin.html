@@ -165,16 +165,15 @@
   table.roster td.rcell,table.roster td.sumc{ position:relative; }
   /* 公告的員工端預覽（模擬 LINE 卡片樣式）*/
   .ntcprev{ background:#F3F5F4; border:1px solid var(--line); border-radius:14px; padding:12px; max-height:56vh; overflow:auto; }
-  .np-card{ background:#fff; border:1px solid #E9EDEB; border-radius:14px; padding:12px 13px; margin-bottom:10px; }
+  .np-card{ display:block; background:#fff; border:1px solid #E9EDEB; border-radius:14px; padding:12px 13px; margin-bottom:10px; }
   .np-card:last-child{ margin-bottom:0; }
   .np-card.top{ border-color:#F0D9A8; box-shadow:0 0 0 1px #F7E7C4 inset; }
-  .np-hd{ display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; }
+  .np-hd{ display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:9px; }
   .np-tag{ color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:7px; white-space:nowrap; }
   .np-ti{ font-size:14.5px; font-weight:800; color:#1c2b26; line-height:1.45; }
-  .np-pin{ font-style:normal; font-size:10.5px; font-weight:800; color:#B7791F; background:#FDF3E0; border-radius:5px; padding:2px 6px; margin-left:6px; }
   .np-new{ font-style:normal; font-size:10.5px; font-weight:800; color:#fff; background:#C0392B; border-radius:5px; padding:2px 6px; margin-left:6px; }
   .np-dt{ font-size:11.5px; color:#8a938f; white-space:nowrap; }
-  .np-bd{ margin-top:9px; padding-top:9px; border-top:1px solid #E9EDEB; font-size:13px; line-height:1.8; color:#3b4a45; white-space:pre-wrap; }
+  .np-bd{ display:block; width:100%; margin-top:9px; padding-top:9px; border-top:1px solid #E9EDEB; font-size:13px; line-height:1.8; color:#3b4a45; white-space:pre-wrap; }
   .np-exp{ margin-top:8px; font-size:11.5px; color:#B7791F; }
   .np-empty{ text-align:center; color:var(--muted); font-size:13px; padding:26px 0; }
   .mpwrap{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line); background:#e8eef0; max-width:100%; }
@@ -604,8 +603,7 @@ function previewNotice(){
       var col=NTC_PREV_COLOR[n.cat]||'#6B7A72';
       h+='<div class="np-card'+(n.top?' top':'')+'">'+
         '<div class="np-hd"><span class="np-tag" style="background:'+col+'">'+esc(n.cat)+'</span>'+
-        '<span class="np-ti">'+esc(n.title)+
-          (n.top?'<i class="np-pin">置頂</i>':'')+(n.isNew?'<i class="np-new">NEW</i>':'')+'</span>'+
+        '<span class="np-ti">'+esc(n.title)+(n.isNew?'<i class="np-new">NEW</i>':'')+'</span>'+
         '<span class="np-dt">'+esc(n.date)+'</span></div>'+
         '<div class="np-bd">'+esc(n.body||'（無內容）')+'</div>'+
         (n.exp?('<div class="np-exp">此公告於 '+esc(n.exp)+' 之後自動下架</div>'):'')+
