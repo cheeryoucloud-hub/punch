@@ -163,6 +163,10 @@
   table.roster th.sumh,table.roster td.sumc{ border-left:3px solid #b9cdc6; }              /* 與日期欄拉開 */
   table.roster td.sumc.bad{ color:#c00000; background:#fdeaea; }
   table.roster td.rcell,table.roster td.sumc{ position:relative; }
+  .mpwrap{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line); background:#e8eef0; max-width:100%; }
+  .mplg{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:9px; font-size:12.5px; color:var(--ink); }
+  .mplg .sw{ display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-3px; margin-right:5px; }
+  .mplg .dot{ display:inline-block; width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #bbb; vertical-align:-2px; margin-right:5px; }
   .maplink{ color:var(--brand); font-weight:700; text-decoration:none; white-space:nowrap; }
   .maplink:hover{ text-decoration:underline; }
   .cornleg{ display:inline-block; width:13px; height:13px; vertical-align:-2px; position:relative; border:1px solid #dce6e2; }
@@ -536,7 +540,7 @@ function loadOverview(){
 }
 
 /* ===================== 打卡申請 ===================== */
-var PK_FILTER=''; var PK_METHOD='';
+var PK_FILTER=''; var PK_METHOD=''; var PK_LIST=[];
 function scPunch(){
   $('main').innerHTML=pageTop('打卡申請',false)+
     '<div class="toolbar">'+mstep()+
@@ -551,17 +555,17 @@ function scPunch(){
 function pkFilterSet(v){ PK_FILTER=v; loadPunch(); }
 function pkMethodSet(v){ PK_METHOD=v; loadPunch(); }
 /* 定位異常：點一下用 Google 地圖看員工實際打卡的位置 */
-function pkMapLink(r){
+function pkMapLink(r,i){
   var la=Number(r.lat), ln=Number(r.lng);
   if(!isFinite(la)||!isFinite(ln)||(!la&&!ln)) return '';
-  var u='https://www.google.com/maps/search/?api=1&query='+la+','+ln;
-  return ' <a class="maplink" href="'+u+'" target="_blank" rel="noopener" title="在 Google 地圖開啟員工打卡位置&#10;'+la.toFixed(6)+', '+ln.toFixed(6)+'">📍 查看位置</a>';
+  return ' <a class="maplink" href="javascript:void(0)" onclick="openPunchMap('+i+')" title="開啟地圖,含容許範圍圓圈">📍 查看位置</a>';
 }
 function loadPunch(){
   api('admin_punchList',{ym:ymDash()}).then(function(j){
     var b=$('pkBody'); if(!b)return;
     if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
-    var all=(j.list||[]).filter(function(r){ return !PK_METHOD||r.method===PK_METHOD; });   // 先套方式篩選
+    PK_LIST=j.list||[];
+    var all=PK_LIST.filter(function(r){ return !PK_METHOD||r.method===PK_METHOD; });   // 先套方式篩選
     var nWait=all.filter(function(r){return r.status==='待核准';}).length;
     var nOk=all.filter(function(r){return r.status==='已核准'||r.status==='正常';}).length;
     var nNo=all.filter(function(r){return r.status==='已退回';}).length;
@@ -582,7 +586,7 @@ function loadPunch(){
       var mcls=(r.method==='外勤')?'info':((r.method==='定位異常')?'bad':'mut');
       var loc=esc(r.place||'—');
       if(r.geo==='超出範圍'||r.geo==='無定位') loc+=' <span class="pill bad" style="font-size:10px">'+esc(r.geo)+(r.dist?('・'+esc(r.dist)+'m'):'')+'</span>';
-      if(r.method==='定位異常'||r.method==='外勤') loc+=pkMapLink(r);
+      if(r.method==='定位異常'||r.method==='外勤') loc+=pkMapLink(r,PK_LIST.indexOf(r));
       var act=r.canAct?'<div class="actions"><button class="btn ap sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'approve\')">核准</button><button class="btn rj sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'reject\')">退回</button></div>':'<span class="hint">—</span>';
       h+='<tr><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td><td>'+esc(r.type)+'</td>'+
         '<td><span class="pill '+mcls+'">'+esc(r.method)+'</span></td><td class="tnum">'+esc(r.dt)+'</td>'+
@@ -591,6 +595,75 @@ function loadPunch(){
     });
     b.innerHTML=h+'</tbody></table>';
   });
+}
+/* ===================== 打卡位置小地圖（OSM 圖磚 + SVG 疊圖,不依賴外部函式庫）===================== */
+var MAP_W=560, MAP_H=380, TILE=256;
+function mercX(lng,z){ return (lng+180)/360*Math.pow(2,z)*TILE; }
+function mercY(lat,z){ var r=lat*Math.PI/180; return (1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z)*TILE; }
+function metersPerPx(lat,z){ return 156543.03392*Math.cos(lat*Math.PI/180)/Math.pow(2,z); }
+/* 挑一個能把整個容許範圍圈裝進畫面的縮放等級 */
+function pickZoom(lat,radius,dist){
+  var need=Math.max(Number(radius)||0, Number(dist)||0)*2.4+60;      // 直徑再留點邊
+  for(var z=19;z>=10;z--){ if(need/metersPerPx(lat,z)<=Math.min(MAP_W,MAP_H)) return z; }
+  return 10;
+}
+function punchMapHtml(r){
+  var pLat=Number(r.lat), pLng=Number(r.lng);
+  var cLat=Number(r.geoLat), cLng=Number(r.geoLng), rad=Number(r.radius);
+  var hasP=isFinite(pLat)&&isFinite(pLng)&&(pLat||pLng);
+  var hasC=isFinite(cLat)&&isFinite(cLng)&&(cLat||cLng)&&isFinite(rad)&&rad>0;
+  if(!hasP&&!hasC) return '<div class="empty">這筆沒有座標可顯示</div>';
+  var aLat=hasC?cLat:pLat, aLng=hasC?cLng:pLng;                      // 以圓心為主,沒有就用打卡點
+  var dist=(hasP&&hasC)?geoDist(pLat,pLng,cLat,cLng):0;
+  var z=pickZoom(aLat,hasC?rad:120,dist);
+  // 畫面中心：圓心與打卡點的中點,兩點都看得到
+  var mLat=(hasP&&hasC)?(pLat+cLat)/2:aLat, mLng=(hasP&&hasC)?(pLng+cLng)/2:aLng;
+  var cx=mercX(mLng,z), cy=mercY(mLat,z);
+  var left=cx-MAP_W/2, top=cy-MAP_H/2;
+  var t0x=Math.floor(left/TILE), t0y=Math.floor(top/TILE);
+  var t1x=Math.floor((left+MAP_W)/TILE), t1y=Math.floor((top+MAP_H)/TILE);
+  var tiles='';
+  for(var tx=t0x;tx<=t1x;tx++) for(var ty=t0y;ty<=t1y;ty++){
+    if(ty<0||ty>=Math.pow(2,z)) continue;
+    var nx=((tx%Math.pow(2,z))+Math.pow(2,z))%Math.pow(2,z);
+    tiles+='<img src="https://tile.openstreetmap.org/'+z+'/'+nx+'/'+ty+'.png" style="position:absolute;left:'+(tx*TILE-left)+'px;top:'+(ty*TILE-top)+'px;width:256px;height:256px" loading="lazy" alt="">';
+  }
+  function px(lat,lng){ return { x: mercX(lng,z)-left, y: mercY(lat,z)-top }; }
+  var svg='<svg width="'+MAP_W+'" height="'+MAP_H+'" style="position:absolute;left:0;top:0">';
+  if(hasC){
+    var c=px(cLat,cLng), rpx=rad/metersPerPx(cLat,z);
+    svg+='<circle cx="'+c.x+'" cy="'+c.y+'" r="'+rpx+'" fill="rgba(22,163,74,.16)" stroke="#16A34A" stroke-width="2"/>'+
+         '<circle cx="'+c.x+'" cy="'+c.y+'" r="5" fill="#15803D" stroke="#fff" stroke-width="2"/>';
+  }
+  if(hasP){
+    var q=px(pLat,pLng);
+    var inside=hasC?(dist<=rad):true;
+    if(hasC){ var c2=px(cLat,cLng);
+      svg+='<line x1="'+c2.x+'" y1="'+c2.y+'" x2="'+q.x+'" y2="'+q.y+'" stroke="'+(inside?'#15803D':'#DC2626')+'" stroke-width="2" stroke-dasharray="5 4"/>'; }
+    svg+='<circle cx="'+q.x+'" cy="'+q.y+'" r="8" fill="'+(inside?'#15803D':'#DC2626')+'" stroke="#fff" stroke-width="3"/>';
+  }
+  svg+='</svg>';
+  var legend='<div class="mplg">'+
+    (hasC?'<span><i class="sw" style="background:rgba(22,163,74,.35);border:1.5px solid #16A34A"></i>容許範圍 '+rad+' 公尺</span>':'')+
+    (hasP?'<span><i class="dot" style="background:'+((hasC&&dist>rad)?'#DC2626':'#15803D')+'"></i>員工打卡位置</span>':'')+
+    ((hasP&&hasC)?('<b style="color:'+(dist<=rad?'var(--ok)':'var(--danger)')+'">距離圓心 '+Math.round(dist)+' 公尺 · '+(dist<=rad?'在範圍內':'超出範圍')+'</b>'):'')+
+    '</div>';
+  var gmap=hasP?('https://www.google.com/maps/search/?api=1&query='+pLat+','+pLng):'';
+  return '<div class="mpwrap" style="width:'+MAP_W+'px;height:'+MAP_H+'px">'+tiles+svg+'</div>'+legend+
+    '<div class="hint" style="margin-top:8px">圖資 © OpenStreetMap 貢獻者'+
+    (gmap?(' · <a class="maplink" href="'+gmap+'" target="_blank" rel="noopener">用 Google 地圖開啟</a>'):'')+'</div>';
+}
+function geoDist(la1,ln1,la2,ln2){
+  var R=6371000, tr=Math.PI/180;
+  var dLa=(la2-la1)*tr, dLn=(ln2-ln1)*tr;
+  var a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*tr)*Math.cos(la2*tr)*Math.sin(dLn/2)*Math.sin(dLn/2);
+  return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function openPunchMap(i){
+  var r=(PK_LIST||[])[i]; if(!r)return;
+  modal('打卡位置 · '+r.name+'（'+r.dt+'）',
+    '<div class="hint" style="margin-bottom:9px">地點：'+esc(r.place||'—')+(r.geo?('　定位結果：'+esc(r.geo)):'')+'</div>'+
+    punchMapHtml(r), function(){ closeModal(); });
 }
 function actPunch(id,dec){ if(dec==='reject'&&!confirm('確定退回此申請?'))return; busyOn('處理中…'); api('admin_approve',{recordId:id,decision:dec}).then(function(j){ busyOff(); if(!j.ok){toast(j.msg||'操作失敗',true);}else{toast(dec==='approve'?'已核准':'已退回');} loadPunch(); }); }
 
