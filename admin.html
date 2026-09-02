@@ -422,7 +422,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-pendfix-01";
+  var APP_VERSION = "2026-09-03-maint-02";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -496,6 +496,7 @@ var I={
   work:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21h16M6 21V10l6-3 6 3v11"/></svg>',
   sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M19 5l-1 1M6 18l-1 1"/></svg>',
   remind:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+  maint:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>',
   theme:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c-5 0-9-4-9-9z"/></svg>'
 };
 var NAV=[
@@ -504,14 +505,16 @@ var NAV=[
   {k:'leave',t:'休假登錄',g:'出勤作業'},{k:'transfer',t:'調休申請',g:'出勤作業'},
   {k:'roster',t:'輪休表',g:'出勤作業'},{k:'report',t:'出勤表',g:'出勤作業'},
   {k:'emp',t:'員工名冊',g:'基本資料'},{k:'site',t:'工地資料',g:'基本資料'},
-  {k:'geo',t:'打卡座標',g:'基本資料'},{k:'acct',t:'帳號權限',g:'基本資料'}
+  {k:'geo',t:'打卡座標',g:'基本資料'},{k:'acct',t:'帳號權限',g:'基本資料'},
+  {k:'maint',t:'年度歸檔／備份',g:'資料維護'}
 ];
 function isHR(){ return ME.role==='管理員'||ME.role==='人資'; }
 function viewAll(){ return ME.role==='管理員'||ME.role==='人資'||ME.role==='主管'; }
 function allowScreens(){
   var r=ME.role;
   // 人資管理（公司公告／LINE提醒）只開給管理員與人資
-  if(r==='管理員'||r==='人資') return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo','acct'];
+  if(r==='管理員') return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo','acct','maint'];
+  if(r==='人資')   return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo','acct'];
   if(r==='主管') return ['overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo'];
   if(r==='工地負責人') return ['overview','punch','punchlog','leave','transfer','roster'];
   return ['overview'];
@@ -566,7 +569,7 @@ function rocTitle(){ return '啓宇營造工程股份有限公司　'+(yy()-1911
 
 /* ===================== 派發 ===================== */
 function render(){
-  var scr={overview:scOverview,punch:scPunch,punchlog:scPunchLog,notice:scNotice,remind:scRemind,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct}[state.screen];
+  var scr={overview:scOverview,punch:scPunch,punchlog:scPunchLog,notice:scNotice,remind:scRemind,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct,maint:scMaint}[state.screen];
   if(scr) scr();
 }
 
@@ -2101,6 +2104,79 @@ function delBase(which,idx){ var meta=BASE_META[which], row=state.base[which].ro
   if(!confirm('確定刪除「'+key+'」?此動作無法復原'))return;
   busyOn('刪除中…');
   api('admin_deleteRow',{sheet:which,key:key}).then(function(j){ busyOff(); if(!j.ok){alert(j.msg||'刪除失敗');return;} toast('已刪除'); baseScreen(which); });
+}
+
+/* ===================== 資料維護：年度歸檔 / 區間備份 ===================== */
+var MAINT_INFO=null;
+function scMaint(){
+  $('main').innerHTML=pageTop('資料維護',false)+
+    '<div class="cards2col" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">'+
+    '<div class="panel" id="mtArch"><div class="spin">載入中…</div></div>'+
+    '<div class="panel" id="mtBak"><div class="spin">載入中…</div></div>'+
+    '</div>';
+  api('admin_maintInfo',{}).then(function(j){
+    if(!j.ok){ $('mtArch').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; $('mtBak').innerHTML=''; return; }
+    MAINT_INFO=j; renderMaint(j);
+  });
+}
+function renderMaint(j){
+  var lastY=j.thisYear-1;
+  // ---- 左：年度歸檔 ----
+  var h='<h3 style="margin:0 0 4px">📦 年度歸檔</h3>'+
+    '<div class="hint" style="margin-bottom:12px">把整年的「打卡紀錄／排休表／已結案調休」搬到同一份試算表的歸檔分頁,現用分頁保持輕快。未結案的調休不會被搬走。</div>'+
+    '<div class="field"><label>要歸檔的年度（只能選已結束的年度）</label><select id="mtYear">';
+  for(var y=lastY;y>=lastY-4;y--) h+='<option>'+y+'</option>';
+  h+='</select></div>'+
+    '<div class="hint" style="margin-bottom:10px">流程：先寫入歸檔分頁 → 核對筆數無誤 → 才清掉現用分頁的該年度資料。歸檔期間系統會短暫上鎖,建議在下班後執行。</div>'+
+    '<button class="add" onclick="doArchive()">開始歸檔</button>';
+  if(j.archives&&j.archives.length){
+    h+='<div style="margin-top:14px"><div class="cap7" style="margin-bottom:6px">已有的歸檔分頁</div>';
+    j.archives.forEach(function(a){ h+='<div class="hint">・'+esc(a.name)+'（'+a.rows+' 筆）</div>'; });
+    h+='</div>';
+  }
+  $('mtArch').innerHTML=h;
+  // ---- 右：區間備份 ----
+  var b='<h3 style="margin:0 0 4px">💾 指定區間備份（Excel）</h3>'+
+    '<div class="hint" style="margin-bottom:12px">勾選分頁、選日期區間,可再依工地或單一人員過濾;匯出一個 Excel,每個分頁一個工作表。</div>'+
+    '<div class="cap7" style="margin-bottom:5px">分頁（有日期欄的才會套用區間）</div><div id="mtSheets" style="margin-bottom:10px">';
+  (j.sheets||[]).forEach(function(m){
+    b+='<label style="display:inline-flex;align-items:center;gap:5px;margin:0 12px 7px 0;font-size:12.5px">'+
+       '<input type="checkbox" value="'+esc(m.key)+'"'+(m.key==='log'?' checked':'')+'> '+esc(m.name)+
+       '<span class="hint">('+m.rows+' 筆'+(m.dated?'':'・整張')+')</span></label>';
+  });
+  b+='</div><div class="row2"><div class="field"><label>起日</label><input type="date" id="mtFrom"></div>'+
+     '<div class="field"><label>迄日</label><input type="date" id="mtTo"></div></div>'+
+     '<div class="row2"><div class="field"><label>工地別</label><select id="mtSite"><option value="__all__">全部工地</option></select></div>'+
+     '<div class="field"><label>單一人員（選填）</label><select id="mtEmp"><option value="">全部人員</option></select></div></div>'+
+     '<button class="add" onclick="doBackup(this)">匯出備份 Excel</button>';
+  $('mtBak').innerHTML=b;
+  api('admin_empList',{}).then(function(r){
+    if(!r.ok)return;
+    var sites={}; (r.list||[]).forEach(function(e){ if(e.site)sites[e.site]=1; });
+    var ms=$('mtSite'); if(ms) ms.innerHTML='<option value="__all__">全部工地</option>'+Object.keys(sites).sort().map(function(x){return '<option>'+esc(x)+'</option>';}).join('');
+    var me=$('mtEmp'); if(me) me.innerHTML='<option value="">全部人員</option>'+(r.list||[]).map(function(e){return '<option value="'+esc(e.empId)+'">'+esc(e.name)+'（'+esc(e.site||'—')+'）</option>';}).join('');
+  });
+}
+function doArchive(){
+  var y=$('mtYear').value;
+  if(!confirm('確定歸檔 '+y+' 年度?\n\n・打卡紀錄／排休表／已結案調休 會搬到「歸檔'+y+'_○○」分頁\n・現用分頁將不再包含該年度資料（歸檔分頁仍可隨時查閱）\n・請先確認 '+y+' 年的出勤表都已匯出留存'))return;
+  busyOn('歸檔中…資料量大時需要一點時間,請勿關閉視窗');
+  api('admin_archiveYear',{year:y}).then(function(j){
+    busyOff();
+    if(!j.ok){ alert(j.msg||'歸檔失敗'); return; }
+    alert('歸檔完成：\n'+(j.detail||[]).join('\n')); scMaint();
+  });
+}
+function doBackup(btn){
+  var keys=Array.prototype.filter.call(document.querySelectorAll('#mtSheets input:checked'),function(i){return true;})
+            .map(function(i){return i.value;});
+  if(!keys.length){ alert('請至少勾選一個分頁'); return; }
+  bBusy(btn,'產生中…'); busyOn('產生備份 Excel 中…請稍候');
+  api('admin_backupExcel',{sheets:keys,from:$('mtFrom').value,to:$('mtTo').value,site:$('mtSite').value,empId:$('mtEmp').value}).then(function(j){
+    busyOff(); bDone(btn);
+    if(!j.ok){ alert(j.msg||'匯出失敗'); return; }
+    toast('已匯出 '+j.sheets+' 個分頁,共 '+j.total+' 筆'); downloadB64(j.b64,j.filename);
+  });
 }
 
 /* ===================== 彈窗 ===================== */
