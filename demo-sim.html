@@ -5,6 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>啓宇打卡系統 · 打卡流程沙盤</title>
+<script>
+var DEMO_VERSION="2026-09-03-latedef-01";
+(function(){try{
+  var cur=new URLSearchParams(location.search).get('_v');
+  fetch(location.pathname+'?probe='+Date.now(),{cache:'no-store'})
+    .then(function(r){return r.text();}).then(function(t){
+      var m=t.match(/DEMO_VERSION="([^"]+)"/); if(!m)return;
+      if(m[1]===DEMO_VERSION)return;            // 手上這份已是最新
+      if(cur===m[1])return;                     // 已帶最新版號回來過,不再跳
+      var u=new URL(location.href); u.searchParams.set('_v',m[1]);
+      location.replace(u.toString());
+    }).catch(function(){});
+}catch(e){}})();
+</script>
 </head>
 <body>
 <title>打卡流程沙盤</title>
