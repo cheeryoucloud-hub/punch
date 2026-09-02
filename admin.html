@@ -422,7 +422,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-maint-02";
+  var APP_VERSION = "2026-09-03-protect-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -2134,6 +2134,17 @@ function renderMaint(j){
     j.archives.forEach(function(a){ h+='<div class="hint">・'+esc(a.name)+'（'+a.rows+' 筆）</div>'; });
     h+='</div>';
   }
+  // ---- 分頁保護 ----
+  var pOn=(j.protectedCount||0)>0;
+  h+='<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">'+
+     '<h3 style="margin:0 0 4px">🔒 分頁保護</h3>'+
+     '<div class="hint" style="margin-bottom:10px">把系統分頁鎖成「僅擁有者可編輯」：後台照常運作,其他人開試算表只能看不能改,避免手動改欄名／排序把系統弄壞。</div>'+
+     '<div style="margin-bottom:10px">目前狀態：'+(pOn
+       ?'<span class="pill ok">已保護 '+j.protectedCount+' / '+j.protectTotal+' 個分頁</span>'
+       :'<span class="pill wait">未保護（'+j.protectTotal+' 個系統分頁裸奔中）</span>')+'</div>'+
+     '<div style="display:flex;gap:8px">'+
+     '<button class="add" onclick="doProtect(true,this)">啟用保護</button>'+
+     '<button class="btn" onclick="doProtect(false,this)">解除保護</button></div>';
   $('mtArch').innerHTML=h;
   // ---- 右：區間備份 ----
   var b='<h3 style="margin:0 0 4px">💾 指定區間備份（Excel）</h3>'+
@@ -2165,6 +2176,16 @@ function doArchive(){
     busyOff();
     if(!j.ok){ alert(j.msg||'歸檔失敗'); return; }
     alert('歸檔完成：\n'+(j.detail||[]).join('\n')); scMaint();
+  });
+}
+function doProtect(on,btn){
+  if(!on&&!confirm('確定解除所有系統分頁的保護?\n解除後任何有編輯權的人都能直接改試算表。'))return;
+  bBusy(btn,on?'保護中…':'解除中…'); busyOn(on?'設定分頁保護中…':'解除保護中…');
+  api(on?'admin_protectSheets':'admin_unprotectSheets',{}).then(function(j){
+    busyOff(); bDone(btn);
+    if(!j.ok){ alert(j.msg||'操作失敗'); return; }
+    toast(j.msg); if(j.skip&&j.skip.length) alert('部分失敗：\n'+j.skip.join('\n'));
+    scMaint();
   });
 }
 function doBackup(btn){
