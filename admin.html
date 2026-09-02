@@ -1363,7 +1363,9 @@ function loadTransfer(){
         (clickable?'<div class="unhint">點此取消簽核</div>':'')+'</div>'; }
     var h='';
     list.forEach(function(t){
-      var stp=t.status==='已核准'?'<span class="pill ok">已核准</span>':(t.status==='已退回'?'<span class="pill bad">已退回</span>':'<span class="pill wait">待審核</span>');
+      var miss=t.missing||[];
+      var missTxt=miss.length===2?'待雙方簽核':(miss[0]==='boss'?'待工地負責人':(miss[0]==='mgr'?'待工地主管':'待審核'));
+      var stp=t.status==='已核准'?'<span class="pill ok">已核准</span>':(t.status==='已退回'?'<span class="pill bad">已退回</span>':'<span class="pill wait">'+missTxt+'</span>');
       h+='<div class="tf'+(t.canAct?' act':'')+'">'+
         '<div class="tf-h"><b>'+esc(t.name)+' <span class="muted" style="font-weight:600;font-size:13px">'+esc(t.site)+'</span></b>'+stp+'</div>'+
         '<div class="tfrow">'+
@@ -1372,8 +1374,7 @@ function loadTransfer(){
           '<div><div class="cap7">調整後</div>'+dchip(t.neu,t.newAM,t.newPM)+'</div>'+
           '<div><div class="cap7">理由</div><div class="rsn">'+esc(t.reason||'—')+'</div></div>'+
           '<div><div class="cap7" style="text-align:center">核准狀態</div><div class="signrow2">'+sg('工地負責人',t.boss,t.id,'boss')+sg('工地主管',t.mgr,t.id,'mgr')+'</div>'+
-          (t.canAct?'<div class="signrow2" style="margin-top:8px"><button class="btn ap sm" style="flex:1" onclick="actTr(\''+esc(t.id)+'\',\'approve\')">核准</button><button class="btn rj sm" style="flex:1" onclick="actTr(\''+esc(t.id)+'\',\'reject\')">退回</button></div>'
-           :(t.canRevoke?'<div class="signrow2" style="margin-top:8px"><button class="btn rj sm" style="flex:1" onclick="actTr(\''+esc(t.id)+'\',\'reject\')">退回（撤銷核准）</button></div>':'<div class="hint" style="text-align:center;margin-top:8px">'+(String(t.status).indexOf('待')===0?'此工地非你權責,無法簽核':'已結案（'+esc(t.status)+'）')+'</div>'))+
+          tfActions(t)+
           '</div>'+
         '</div>'+
         '</div>';
@@ -1382,6 +1383,25 @@ function loadTransfer(){
     var ss2=$('tfStatusSel'); if(ss2) ss2.value=TF_FILTER;
   });
 }
+/* 雙簽：只列出「這個人還能簽的那一格」;兩格都能簽（人資/管理員）就分開列 */
+function tfActions(t){
+  var cans=t.cans||[], h='';
+  if(t.canAct){
+    var lbl={boss:'核准（工地負責人）',mgr:'核准（工地主管）'};
+    h+='<div class="signrow2" style="margin-top:8px;flex-wrap:wrap">';
+    cans.forEach(function(c){
+      h+='<button class="btn ap sm" style="flex:1;min-width:120px" onclick="actTr('+B_Q2(t.id)+','+B_Q2('approve')+','+B_Q2(c)+')">'+lbl[c]+'</button>';
+    });
+    h+='<button class="btn rj sm" style="flex:1;min-width:80px" onclick="actTr('+B_Q2(t.id)+','+B_Q2('reject')+')">退回</button></div>';
+  } else if(t.canRevoke){
+    h+='<div class="signrow2" style="margin-top:8px"><button class="btn rj sm" style="flex:1" onclick="actTr('+B_Q2(t.id)+','+B_Q2('reject')+')">退回（撤銷核准）</button></div>';
+  } else {
+    h+='<div class="hint" style="text-align:center;margin-top:8px">'+(String(t.status).indexOf('待')===0?'這張單還缺的那一格不是你的權責':'已結案（'+esc(t.status)+'）')+'</div>';
+  }
+  if(t.canDelete) h+='<div class="signrow2" style="margin-top:6px"><button class="btn rj sm" style="flex:1" onclick="delTf('+B_Q2(t.id)+','+B_Q2(t.name)+')">🗑 刪除（尚未簽核）</button></div>';
+  return h;
+}
+function B_Q2(v){ return '&#39;'+String(v).replace(/&/g,'&amp;').replace(/'/g,'&#39;')+'&#39;'; }
 function signbox(role,who){ if(who) return '<div class="sign signed"><div class="role">'+role+'</div><div class="who">'+esc(who)+' ✓</div></div>';
   return '<div class="sign"><div class="role">'+role+'</div><div class="who muted" style="font-weight:600">待簽核</div></div>'; }
 function unsignTf(id,stage){
@@ -1394,12 +1414,23 @@ function unsignTf(id,stage){
     alert('已取消【'+who+'】簽核,此單回到待簽核狀態。'); loadTransfer();
   });
 }
-function actTr(id,dec){
+function actTr(id,dec,stage){
   if(dec==='reject'&&!confirm('確定退回此調休申請?已核准者會一併還原輪休表。'))return;
   busyOn(dec==='approve'?'核准中…':'退回中…');
-  api('admin_actTransfer',{id:id,decision:dec}).then(function(j){
-    busyOff(); if(!j.ok){ alert(j.msg||'操作失敗'); } else { toast(dec==='approve'?'已核准':'已退回'); }
+  api('admin_actTransfer',{id:id,decision:dec,stage:stage||''}).then(function(j){
+    busyOff();
+    if(!j.ok){ alert(j.msg||'操作失敗'); }
+    else if(dec!=='approve'){ toast('已退回'); }
+    else if(j.done){ toast('兩方都簽好了,調休已生效'); }
+    else { toast('已簽核,還在等'+(j.waiting||'另一方')); }
     loadTransfer();
+  });
+}
+function delTf(id,name){
+  if(!confirm('確定刪除「'+name+'」這張調休申請?\n\n・只有兩格都還沒簽核的單可以刪\n・刪除後無法復原,需重新送單'))return;
+  busyOn('刪除中…');
+  api('admin_deleteTransfer',{id:id}).then(function(j){
+    busyOff(); if(!j.ok){ alert(j.msg||'刪除失敗'); return; } toast('已刪除'); loadTransfer();
   });
 }
 
@@ -1998,7 +2029,10 @@ function editBase(which,idx){
       var el=$('f_'+x); if(el) obj[x]=el.value; });
     busyOn('儲存中…');
     api('admin_saveRow',{sheet:which,origKey:origKey,row:obj}).then(function(j){ busyOff();
-      if(!j.ok){ toast(j.msg||'儲存失敗',true); return; } closeModal(); toast('已儲存'); baseScreen(which); });
+      if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
+      closeModal(); toast('已儲存');
+      if(j.renamed) alert('已將「'+j.renamed.from+'」改名為「'+j.renamed.to+'」。' + String.fromCharCode(10) + (j.msg||''));
+      baseScreen(which); });
   });
 }
 /** 在職員工清單（給工地主管/負責人下拉） */
