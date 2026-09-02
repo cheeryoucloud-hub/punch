@@ -1461,7 +1461,7 @@ function rosterHtml(r){
   function bk(e){return e.boss;} function mk(e){return e.boss+'|'+e.mgr;} function sk(e){return e.boss+'|'+e.mgr+'|'+e.site;}
   function runspan(idx,keyFn){ if(idx>0&&keyFn(g[idx])===keyFn(g[idx-1]))return 0; var span=1; for(var j=idx+1;j<g.length&&keyFn(g[j])===keyFn(g[idx]);j++)span++; return span; }
   var days=r.days||[];
-  var h1='<tr><th class="lh" rowspan="2">負責人</th><th class="lh" rowspan="2">工地負責人</th><th class="lh" rowspan="2">工地</th><th class="lh">日期</th>';
+  var h1='<tr><th class="lh" rowspan="2">工地主管</th><th class="lh" rowspan="2">工地負責人</th><th class="lh" rowspan="2">工地</th><th class="lh">日期</th>';
   var h2='<th class="lh">星期</th>';
   var SUMH='<th class="sumh" rowspan="2" title="本月例假天數,應為 8 天">例假<br>天數</th>';
   days.forEach(function(d){ var sp=r.special&&r.special[d.d]; var we=(d.dow===0||d.dow===6)?'we':''; var c1=('dcol '+we+(sp?(' '+(SPCLS[sp]||'')):'')).trim();
