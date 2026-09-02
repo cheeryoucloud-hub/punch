@@ -55,6 +55,7 @@
   .pbtn.in{ background:var(--teal); color:#fff; box-shadow:0 9px 18px rgba(14,124,102,.26); }
   .pbtn.out{ background:#fff; color:var(--amber); border:1.6px solid #F0D9AC; }
   .pbtn:disabled{ opacity:.5; }
+  .olderhint{ font-size:12.5px; color:var(--muted); line-height:1.7; margin:-4px 0 10px; }
   .nomobile{ background:#FFF6E8; border:1px solid #F0D9AC; border-radius:14px; padding:14px 16px;
     font-size:13.5px; line-height:1.85; color:var(--ink); margin-top:4px; }
   .nomobile b{ color:var(--amber); }
@@ -275,7 +276,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-09-02-mobonly-01";
+  var APP_VERSION = "2026-09-02-pendall-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -1259,6 +1260,18 @@
       (x.reason ? '<div class="muted">備註：' + esc(x.reason) + '</div>' : '') +
       ovActions('punch', x.recordId, x.canAct) + '</div>';
   }
+  /* 之前送出、到現在還沒核准的：不管上方選哪一天都會出現,避免日期一過就被蓋掉忘了處理 */
+  function ovOlder(o) {
+    if (!o || !o.count) return '';
+    var all = [].concat(o.transfer || [], o.makeup || [], o.field || [], o.geo || []);
+    var act = all.filter(function (x) { return x.canAct; }).length;
+    var h = '<h2>⏳ 之前尚未核准 <span class="tag wait">' + o.count + ' 筆</span>' +
+            (act ? ' <span class="tag wait">待你簽核 ' + act + '</span>' : '') + '</h2>' +
+            '<div class="olderhint">先前送出還沒處理的申請,不受上方日期影響,會一直顯示到核准或退回為止。</div>';
+    (o.transfer || []).forEach(function (x) { h += ovTfCard(x); });
+    ['makeup', 'field', 'geo'].forEach(function (k) { (o[k] || []).forEach(function (x) { h += ovPnCard(x, k); }); });
+    return h;
+  }
   function ovSection(title, kind, list) {
     list = list || [];
     var actCount = list.filter(function (x) { return x.canAct; }).length;
@@ -1278,6 +1291,7 @@
     if (!isCache && IS_ADMIN && VIEW_EMPS === null) { loadViewEmps(function () { renderOverview(d); }); }
     var html = '<h1>出勤概覽</h1><div class="date">' + esc(d.name) + '（' + esc(d.role) + '）' + (d.viewing ? ' · 以 <b>' + esc(d.viewing) + '</b> 的視角檢視' : '') + '</div>' + viewAsBar(d.name) + ovDatebar(d);
     html += '<div class="card" style="margin-bottom:14px"><div class="myday-title">' + (d.date === d.today ? '我的今日出勤' : '我的當日出勤') + '</div>' + ovMy(d.me) + '</div>';
+    html += ovOlder(d.older);
 
     if (d.sites && d.sites.length) {
       html += '<h2>負責工地出勤</h2><select id="ovSiteFilter"><option value="__all__">全部工地</option>';
