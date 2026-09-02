@@ -266,6 +266,12 @@
   .btn .bsp,.btn.rj .bsp{ border-color:var(--brand-soft); border-top-color:var(--brand); }
   button.bsy{ opacity:.9; cursor:default; }
   /* 頂端載入條：所有 api() 都會亮,按下任何按鈕立刻看得到系統在跑 */
+  #errBar{ position:fixed; left:0; right:0; bottom:0; z-index:10001; display:none;
+    background:#A5382A; color:#fff; font-size:13px; padding:11px 14px; gap:10px;
+    align-items:center; justify-content:center; line-height:1.5; }
+  #errBar.show{ display:flex; }
+  #errBar button{ font-family:inherit; font-size:12.5px; font-weight:800; padding:6px 13px;
+    border:0; border-radius:8px; background:#fff; color:#A5382A; cursor:pointer; white-space:nowrap; }
   #ldBar{ position:fixed; top:0; left:0; right:0; height:3px; z-index:120; overflow:hidden;
     background:var(--brand-soft); opacity:0; transition:opacity .15s; pointer-events:none; }
   #ldBar.on{ opacity:1; }
@@ -415,6 +421,26 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
+  // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
+  var APP_VERSION = "2026-09-02-fastappr-01";
+  (function ensureFresh() {
+    try {
+      var cur = new URLSearchParams(location.search).get('_v');
+      fetch(location.pathname + '?probe=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return r.text(); })
+        .then(function (t) {
+          var m = t.match(/APP_VERSION\s*=\s*"([^"]+)"/);
+          if (!m) return;
+          var latest = m[1];
+          if (latest === APP_VERSION) return;        // 手上這份已是最新
+          if (cur === latest) return;                // 已帶著最新版號回來過 → 不再跳,避免無限重整
+          var u = new URL(location.href);
+          u.searchParams.set('_v', latest);          // set 而非附加,網址不會越積越長
+          location.replace(u.toString());
+        }).catch(function () { });
+    } catch (e) { }
+  })();
+
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function p2(n){return (n<10?'0':'')+n;}
@@ -2085,6 +2111,29 @@ function modal(title,body,onOk){
   $('mOk').onclick=onOk;
 }
 function closeModal(){ $('modalHost').innerHTML=''; }
+
+  /* 全域錯誤網：任何一次算繪出錯,至少要把遮罩收掉並告訴使用者,
+     不然畫面會停在半成品,只能整頁重新整理。 */
+  (function errNet() {
+    var last = 0;
+    function show(what) {
+      var now = Date.now(); if (now - last < 3000) return; last = now;   // 連續錯誤只提示一次
+      try { busyOff(); } catch (e) { }
+      var el = document.getElementById('errBar');
+      if (!el) {
+        el = document.createElement('div'); el.id = 'errBar';
+        document.body.appendChild(el);
+      }
+      el.innerHTML = '<span>畫面載入發生問題（' + String(what).substring(0, 60) + '）</span>' +
+                     '<button type="button">重新載入</button>';
+      el.querySelector('button').onclick = function () { location.reload(); };
+      el.className = 'show';
+    }
+    window.addEventListener('error', function (e) { show((e && e.message) || '未知錯誤'); });
+    window.addEventListener('unhandledrejection', function (e) {
+      show((e && e.reason && (e.reason.message || e.reason)) || '連線未完成');
+    });
+  })();
 
 /* ===================== 啟動 ===================== */
 try{ var th=localStorage.getItem('qy_theme'); if(th) document.documentElement.setAttribute('data-theme',th); }catch(e){}

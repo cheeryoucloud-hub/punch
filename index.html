@@ -55,6 +55,12 @@
   .pbtn.in{ background:var(--teal); color:#fff; box-shadow:0 9px 18px rgba(14,124,102,.26); }
   .pbtn.out{ background:#fff; color:var(--amber); border:1.6px solid #F0D9AC; }
   .pbtn:disabled{ opacity:.5; }
+  #errBar{ position:fixed; left:0; right:0; bottom:0; z-index:10001; display:none;
+    background:#A5382A; color:#fff; font-size:13px; padding:11px 14px; gap:10px;
+    align-items:center; justify-content:center; line-height:1.5; }
+  #errBar.show{ display:flex; }
+  #errBar button{ font-family:inherit; font-size:12.5px; font-weight:800; padding:6px 13px;
+    border:0; border-radius:8px; background:#fff; color:#A5382A; cursor:pointer; white-space:nowrap; }
   .olderhint{ font-size:12.5px; color:var(--muted); line-height:1.7; margin:-4px 0 10px; }
   h3.ovsub{ font-size:13px; font-weight:800; color:var(--muted); margin:14px 0 7px; letter-spacing:.02em; }
   .sgbar{ display:flex; gap:8px; flex-wrap:wrap; margin-top:7px; }
@@ -283,8 +289,8 @@
   var MOBILE_ONLY = true;   // true = 只有「手機的 LINE App」裡才能按打卡（補打卡/班表/概覽等不受限）
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
-  // ===== 自動破快取：每次改版把下面版本號換新值，使用者重開會自動抓最新版 =====
-  var APP_VERSION = "2026-09-02-tf2-01";
+  // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
+  var APP_VERSION = "2026-09-02-fastappr-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -294,12 +300,36 @@
           var m = t.match(/APP_VERSION\s*=\s*"([^"]+)"/);
           if (!m) return;
           var latest = m[1];
-          if (latest !== APP_VERSION && cur !== latest) {
-            var sep = location.href.indexOf('?') >= 0 ? '&' : '?';
-            location.replace(location.href + sep + '_v=' + encodeURIComponent(latest));
-          }
-        }).catch(function () {});
-    } catch (e) {}
+          if (latest === APP_VERSION) return;        // 手上這份已是最新
+          if (cur === latest) return;                // 已帶著最新版號回來過 → 不再跳,避免無限重整
+          var u = new URL(location.href);
+          u.searchParams.set('_v', latest);          // set 而非附加,網址不會越積越長
+          location.replace(u.toString());
+        }).catch(function () { });
+    } catch (e) { }
+  })();
+
+  /* 全域錯誤網：任何一次算繪出錯,至少要把遮罩收掉並告訴使用者,
+     不然畫面會停在半成品,只能整頁重新整理。 */
+  (function errNet() {
+    var last = 0;
+    function show(what) {
+      var now = Date.now(); if (now - last < 3000) return; last = now;   // 連續錯誤只提示一次
+      try { ovBusyOff(); } catch (e) { }
+      var el = document.getElementById('errBar');
+      if (!el) {
+        el = document.createElement('div'); el.id = 'errBar';
+        document.body.appendChild(el);
+      }
+      el.innerHTML = '<span>畫面載入發生問題（' + String(what).substring(0, 60) + '）</span>' +
+                     '<button type="button">重新載入</button>';
+      el.querySelector('button').onclick = function () { location.reload(); };
+      el.className = 'show';
+    }
+    window.addEventListener('error', function (e) { show((e && e.message) || '未知錯誤'); });
+    window.addEventListener('unhandledrejection', function (e) {
+      show((e && e.reason && (e.reason.message || e.reason)) || '連線未完成');
+    });
   })();
 
   var P = getParams();
@@ -1427,6 +1457,45 @@
       ovToast('已刪除'); startOverview();
     }).catch(function (e) { ovBusyOff(); bDone(btn); ovToast('刪除失敗：' + e, true); });
   }
+  /* 簽核完就地改這張卡：整張結案就淡出移除,只簽掉一格就把該格打勾 */
+  function ovCardDone(box, res, word, kind, stage) {
+    var card = box; while (card && !(card.classList && card.classList.contains('arow'))) card = card.parentNode;
+    if (!card) return;
+    if (kind === 'transfer' && res.done === false) {                 // 還缺另一格 → 只更新這張卡
+      var sgs = card.querySelectorAll('.sgc');
+      var i = (stage === 'mgr') ? 1 : 0;
+      if (sgs[i]) { sgs[i].className = 'sgc ok'; sgs[i].textContent = '✔ ' + (i ? '工地主管' : '工地負責人'); }
+      Array.prototype.forEach.call(card.querySelectorAll('.pbtns'), function (b) { b.remove(); });
+      card.classList.remove('pend');
+      card.insertAdjacentHTML('beforeend', '<div class="muted small">已簽核,等 ' + esc(res.waiting || '另一方') + '。</div>');
+      return;
+    }
+    card.style.transition = 'opacity .25s, transform .25s';
+    card.style.opacity = '0'; card.style.transform = 'scale(.97)';
+    setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); ovBumpCount(); }, 260);
+  }
+  /* 待核准的筆數標籤跟著減 */
+  function ovBumpCount() {
+    var h2 = null;
+    Array.prototype.forEach.call(document.querySelectorAll('h2'), function (e) { if (e.textContent.indexOf('待核准') === 0) h2 = e; });
+    if (!h2) return;
+    var left = document.querySelectorAll('.arow').length;
+    var tags = h2.querySelectorAll('.tag');
+    if (tags[0]) tags[0].textContent = left + ' 筆';
+    var act = document.querySelectorAll('.arow.pend').length;
+    if (tags[1]) { if (act) tags[1].textContent = '待你簽核 ' + act; else tags[1].remove(); }
+  }
+  /* 背景重抓：不顯示遮罩,回來才悄悄重畫 */
+  var OV_SILENT = false;
+  function ovSilentRefresh() {
+    if (OV_SILENT) return; OV_SILENT = true;
+    post({ action: 'overview', idToken: me.idToken, date: ovDate, viewAs: VIEW_AS })
+      .then(function (d) {
+        OV_SILENT = false;
+        if (d && d.ok) { lcSet('ov_' + lcToday() + '_' + (ovDate || 'today') + '_' + VIEW_AS, d); renderOverview(d); }
+      })
+      .catch(function () { OV_SILENT = false; });
+  }
   function ovAct(kind, id, decision, btn, stage) {
     var box = btn.parentNode;
     var word = (decision === 'approve') ? '核准' : '退回';
@@ -1445,10 +1514,12 @@
         Array.prototype.forEach.call(box.querySelectorAll('button'), function (x) { x.disabled = false; x.classList.remove('off'); });
         return;
       }
-      ovBusy('已' + word + ',更新中…');
-      startOverview();
-      setTimeout(function () { ovBusyOff(); ovToast('已' + word); }, 400);
-    }).catch(function (e) { ovBusyOff(); ovToast('操作失敗：' + e, true); startOverview(); });
+      // 立刻收掉遮罩、就地更新畫面,不等第二趟連線 —— 使用者感受到的等待只剩這一次往返
+      ovBusyOff();
+      ovCardDone(box, res, word, kind, stage);
+      ovToast(res.done === false ? ('已簽核,等' + (res.waiting || '另一方')) : ('已' + word));
+      ovSilentRefresh();                                             // 背景對帳,不擋畫面
+    }).catch(function (e) { ovBusyOff(); ovToast('操作失敗：' + e, true); ovSilentRefresh(); });
   }
 </script>
 </body>
