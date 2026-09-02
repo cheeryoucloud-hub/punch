@@ -257,12 +257,11 @@
       <input id="note" class="fld" placeholder="例：交通延誤，遲到 10 分">
     </div>
     <div id="lateWrap" style="display:none">
-      <label class="lbl">晚退原因（17:30 後打「下班」必選）</label>
+      <label class="lbl">晚退原因（預設「其他」，可改選）</label>
       <select id="lateSel" class="fld">
-        <option value="">請選擇原因…</option>
+        <option selected>其他（個人因素）</option>
         <option>交通等候</option>
         <option>忘記打卡</option>
-        <option>其他（個人因素）</option>
       </select>
     </div>
     <div id="lateWork" class="miniwarn" style="display:none">
@@ -290,7 +289,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-02-batch-01";
+  var APP_VERSION = "2026-09-03-latedef-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -783,7 +782,7 @@
     if (type === '上班' && t < '07:30' && !note) { alert('非正常上班時間（早到）,請於「備註」說明原因'); if (ne) ne.focus(); return; }
     if (type === '下班' && t > '17:30') {                       // 晚退：必選原因,併入備註
       var ls = document.getElementById('lateSel'), lv = ls ? ls.value : '';
-      if (!lv) { alert('已超過正常下班時間,請先選擇「晚退原因」'); if (ls) ls.focus(); return; }
+      if (!lv) { alert('請選擇「晚退原因」'); if (ls) ls.focus(); return; }   // 有預設值,正常不會進來
       note = note ? (lv + '；' + note) : lv;
     }
     if (type === '加班結束') {                                   // 加班：用獨立的加班原因欄

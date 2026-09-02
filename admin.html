@@ -422,7 +422,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-02-batch-01";
+  var APP_VERSION = "2026-09-03-pendfix-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -590,12 +590,15 @@ function loadOverview(){
     if(!d.ok){ $('ovBody').innerHTML='<div class="empty">'+esc(d.msg||'讀取失敗')+'</div>'; return; }
     var sites=d.sites||[]; var inC=0,outC=0,lv=0,tot=0, notIn=[], onLeave=[];
     sites.forEach(function(g){ g.people.forEach(function(pp){ tot++; if(pp.leave){lv++;onLeave.push({n:pp.name,s:g.site,lv:pp.leave});return;} if(pp.in)inC++; else notIn.push({n:pp.name,s:g.site}); if(pp.out)outC++; }); });
-    var pend=d.pendingAct||0; var need=Math.max(0,tot-lv); var rate=need?Math.round(inC/need*100):0;   // 打卡率不含休假人數
+    var pend=d.pendingAct||0, pPu=d.pendingPunch||0, pTf=d.pendingTf||0;
+    var pendGo=(pPu||!pTf)?'punch':'transfer';                       // 只有調休待辦時直接跳調休頁
+    var pendSub=pend?('打卡 '+pPu+' 件 · 調休 '+pTf+' 件'):'目前沒有待辦';
+    var need=Math.max(0,tot-lv); var rate=need?Math.round(inC/need*100):0;   // 打卡率不含休假人數
     var h='<div class="cards">'+
       statc('g',I.work,'應出勤 <span class="sm">需打卡</span>',tot,'人','')+
       statc('g',I.overview,'已上班',inC,'人','已下班 '+outC+' 人')+
       statc('a',I.sun,'休假',lv,'人','')+
-      '<div class="stat clickable" onclick="go(\'punch\')" title="點我前往打卡申請"><div class="ic b">'+I.transfer+'</div><div><div class="lab">待審核申請</div><div class="val tnum">'+pend+'<small>件</small></div><div class="sub">點我前往審核 →</div></div></div>'+
+      '<div class="stat clickable" onclick="go(&#39;'+pendGo+'&#39;)" title="點我前往審核"><div class="ic b">'+I.transfer+'</div><div><div class="lab">待審核申請</div><div class="val tnum">'+pend+'<small>件</small></div><div class="sub">'+pendSub+'</div></div></div>'+
       '<div class="stat pink"><div class="ic r">'+I.punch+'</div><div><div class="lab">尚未打卡</div><div class="val tnum">'+notIn.length+'<small>人</small></div><div class="sub">應出勤 '+need+' 人</div></div></div>'+
       '<div class="stat"><div class="donut" style="background:conic-gradient(var(--brand) 0 '+rate+'%, var(--line) '+rate+'% 100%)"><span>'+rate+'%</span></div><div><div class="lab">打卡率</div><div class="sub" style="margin-top:6px">上班 '+inC+' / '+need+' 人（不含休假）</div></div></div>'+
       '</div>';
