@@ -422,7 +422,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-02-fastappr-01";
+  var APP_VERSION = "2026-09-02-batch-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -1432,7 +1432,7 @@ function signbox(role,who){ if(who) return '<div class="sign signed"><div class=
   return '<div class="sign"><div class="role">'+role+'</div><div class="who muted" style="font-weight:600">待簽核</div></div>'; }
 function unsignTf(id,stage){
   var who=(stage==='mgr'?'工地主管':'工地負責人');
-  if(!confirm('確定取消【'+who+'】這一關的簽核?\n\n・若此單已核准,會一併「還原輪休表」(調休失效)\n・取消「工地負責人」時,主管那關也會一併失效\n・申請單會退回為待簽核狀態'))return;
+  if(!confirm('確定取消【'+who+'】的簽核?\n\n・若此單已核准,會一併「還原輪休表」(調休失效)\n・雙簽制:只清掉這一格,另一方已簽的仍然保留\n・申請單回到待簽核,等這一格重簽'))return;
   busyOn('取消簽核中…');
   api('admin_unsignTransfer',{id:id,stage:stage}).then(function(j){
     busyOff();
@@ -2129,9 +2129,19 @@ function closeModal(){ $('modalHost').innerHTML=''; }
       el.querySelector('button').onclick = function () { location.reload(); };
       el.className = 'show';
     }
-    window.addEventListener('error', function (e) { show((e && e.message) || '未知錯誤'); });
+    function noisy(t) {                                   // 這些不是我們的錯,不要嚇使用者
+      t = String(t || '');
+      return !t || /liff|LIFF|ResizeObserver|Load failed|NetworkError|AbortError/.test(t);
+    }
+    window.addEventListener('error', function (e) {
+      var m = (e && e.message) || '';
+      if (noisy(m) && !(e && e.error)) return;           // 純資源載入失敗略過
+      show(m || '未知錯誤');
+    });
     window.addEventListener('unhandledrejection', function (e) {
-      show((e && e.reason && (e.reason.message || e.reason)) || '連線未完成');
+      var m = (e && e.reason && (e.reason.message || e.reason)) || '';
+      if (noisy(m)) return;                              // 連線失敗本來就有 toast 提示
+      show(m);
     });
   })();
 
