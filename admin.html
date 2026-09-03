@@ -257,6 +257,50 @@
   .spin{ text-align:center; color:var(--muted); padding:34px 0; }
 
   /* modal */
+  /* 報表匯出 */
+  .exp-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; margin:10px 0 4px; }
+  .exp-card{ position:relative; display:flex; gap:12px; align-items:flex-start; background:var(--surface);
+    border:1.6px solid var(--line); border-radius:14px; padding:14px 15px; cursor:pointer; user-select:none;
+    transition:border-color .12s, box-shadow .12s; }
+  .exp-card:hover{ border-color:var(--brand); }
+  .exp-card.on{ border-color:var(--brand); box-shadow:0 0 0 3px var(--brand-soft); }
+  .exp-card .ic{ width:38px; height:38px; border-radius:11px; background:var(--surface-2); color:var(--muted);
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .exp-card .ic svg{ width:20px; height:20px; }
+  .exp-card.on .ic{ background:var(--brand); color:#fff; }
+  .exp-card b{ display:block; font-size:14px; margin-bottom:3px; }
+  .exp-card .d{ font-size:12px; color:var(--muted); line-height:1.55; }
+  .exp-card .tick{ position:absolute; top:10px; right:12px; width:19px; height:19px; border-radius:50%;
+    border:1.6px solid var(--line); display:flex; align-items:center; justify-content:center;
+    font-size:12px; color:#fff; background:var(--surface); }
+  .exp-card.on .tick{ background:var(--brand); border-color:var(--brand); }
+  .exp-opts{ display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end; margin:18px 0 6px;
+    padding:15px 17px; background:var(--surface-2); border-radius:13px; }
+  .exp-opts .f label{ display:block; font-size:11.5px; font-weight:700; color:var(--muted); margin-bottom:6px; }
+  .exp-opts select{ padding:9px 12px; border:1px solid var(--line); border-radius:10px;
+    background:var(--surface); color:var(--ink); font-family:inherit; font-size:13.5px; }
+  .exp-seg{ display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--surface); }
+  .exp-seg button{ border:0; background:transparent; color:var(--muted); font-family:inherit; font-size:13px;
+    font-weight:700; padding:9px 18px; cursor:pointer; }
+  .exp-seg button.on{ background:var(--brand); color:#fff; }
+  .exp-foot{ display:flex; align-items:center; gap:14px; margin-top:16px; }
+  .exp-go{ border:none; background:var(--brand); color:#fff; font-family:inherit; font-size:14px; font-weight:800;
+    padding:12px 28px; border-radius:11px; cursor:pointer; }
+  .exp-go:disabled{ opacity:.35; cursor:default; }
+  .exp-sum{ font-size:12.5px; color:var(--muted); }
+  .exp-prog{ margin-top:16px; display:none; }
+  .exp-prog.show{ display:block; }
+  .exp-prog .pr{ display:flex; align-items:center; gap:10px; padding:9px 4px; font-size:13px;
+    border-bottom:1px dashed var(--line); }
+  .exp-prog .pr:last-child{ border-bottom:none; }
+  .exp-prog .st{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:12px; flex:0 0 auto; background:var(--surface-2); color:var(--muted); }
+  .exp-prog .pr.run .st{ background:var(--brand-soft); }
+  .exp-prog .pr.run .st i{ display:block; width:12px; height:12px; border:2px solid var(--brand-soft);
+    border-top-color:var(--brand); border-radius:50%; animation:spin .7s linear infinite; }
+  .exp-prog .pr.ok .st{ background:var(--brand); color:#fff; }
+  .exp-prog .pr.bad .st{ background:var(--danger); color:#fff; }
+  .exp-prog .msg{ color:var(--muted); font-size:12px; margin-left:auto; }
   .busy{ position:fixed; inset:0; background:rgba(248,250,249,.72); backdrop-filter:blur(1.5px); display:flex; align-items:center; justify-content:center; z-index:90; }
   .busy .box{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px 26px; box-shadow:0 12px 40px rgba(20,30,40,.16); display:flex; align-items:center; gap:12px; font-weight:700; font-size:14px; }
   .busy .sp{ width:20px; height:20px; border:2.5px solid var(--brand-soft); border-top-color:var(--brand); border-radius:50%; animation:spin .7s linear infinite; }
@@ -422,7 +466,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-export-01";
+  var APP_VERSION = "2026-09-03-expui-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -442,6 +486,8 @@ var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   })();
 
 function $(id){return document.getElementById(id);}
+/* 安全寫入：目標元素已不在（使用者切到別頁）就默默略過 —— 舊畫面的回呼不該炸新畫面 */
+function put(id,html){ var el=$(id); if(el) el.innerHTML=html; return !!el; }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function p2(n){return (n<10?'0':'')+n;}
 function cid(x){ var s=String(x==null?'':x).trim(); return /^\d+$/.test(s)?String(parseInt(s,10)):s; }
@@ -591,7 +637,8 @@ function statc(ic,svg,lab,val,unit,sub){ return '<div class="stat"><div class="i
 function loadOverview(){
   api('admin_overview',{date:state.ovDate}).then(function(d){
     state.ovCur=d.date||todayStr();
-    if(!d.ok){ $('ovBody').innerHTML='<div class="empty">'+esc(d.msg||'讀取失敗')+'</div>'; return; }
+    if(!$('ovBody')) return;                       // 已切到別頁,放棄舊回呼
+    if(!d.ok){ put('ovBody','<div class="empty">'+esc(d.msg||'讀取失敗')+'</div>'); return; }
     var sites=d.sites||[]; var inC=0,outC=0,lv=0,tot=0, notIn=[], onLeave=[];
     sites.forEach(function(g){ g.people.forEach(function(pp){ tot++; if(pp.leave){lv++;onLeave.push({n:pp.name,s:g.site,lv:pp.leave});return;} if(pp.in)inC++; else notIn.push({n:pp.name,s:g.site}); if(pp.out)outC++; }); });
     var pend=d.pendingAct||0, pPu=d.pendingPunch||0, pTf=d.pendingTf||0;
@@ -1684,7 +1731,8 @@ function loadRosterScreen(useOpen){
     (isLeave?'':'<div class="sigfoot" style="grid-template-columns:repeat(3,1fr);margin-top:22px"><div>協理</div><div>經理</div><div>製表</div></div>')+
     '<div id="rNote"></div></div>';
   api('admin_rosterTable',{year:yy(),month:mm(),draft:isLeave,site:RSITE,optsOnly:!RGEN,useOpenPeriod:!!useOpen}).then(function(j){
-    if(!j.ok){ $('rHost').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
+    if(!$('rHost')) return;
+    if(!j.ok){ put('rHost','<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'); return; }
     if(useOpen&&j.year&&j.month) state.ym=j.year+'/'+p2(j.month);   // 只有「進入畫面帶登錄期別」時才同步月份
     ROSTER_DATA=j; state.roster=j; ROSTER_CHANGES={}; SPECIAL_CHANGES={}; NOTE_CHANGES={};
     if(j.optsOnly) renderRosterPick(); else renderRosterScreen();
@@ -1831,10 +1879,11 @@ function scReport(){
     '<span id="rpTools"></span></div>'+
     '<div class="panel" id="rpBody"><div class="empty">選擇員工與月份後按「產生」</div></div>';
   api('admin_empList',{needPunchOnly:true}).then(function(j){
-    if(!j.ok||!j.list.length){ $('rpEmp').innerHTML='<option value="">（無可選員工）</option>'; return; }
+    if(!$('rpEmp')) return;
+    if(!j.ok||!j.list.length){ put('rpEmp','<option value="">（無可選員工）</option>'); return; }
     state.rpEmps=j.list;
     var st={}; j.list.forEach(function(e){ if(e.site)st[e.site]=1; });
-    $('rpSite').innerHTML='<option value="__all__">全部工地</option>'+Object.keys(st).map(function(s){return '<option>'+esc(s)+'</option>';}).join('');
+    put('rpSite','<option value="__all__">全部工地</option>'+Object.keys(st).map(function(s){return '<option>'+esc(s)+'</option>';}).join(''));
     rpFillEmp();
   });
 }
@@ -1857,7 +1906,8 @@ function loadReport(){
   var emp=$('rpEmp').value; if(!emp){ alert('請先選擇員工'); return; }
   RPTCHG={}; $('rpBody').innerHTML='<div class="spin">產生中…</div>';
   api('admin_report',{empId:emp,year:yy(),month:mm()}).then(function(j){
-    if(!j.ok){ $('rpBody').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; if($('rpTools'))$('rpTools').innerHTML=''; return; }
+    if(!$('rpBody')) return;
+    if(!j.ok){ put('rpBody','<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'); put('rpTools',''); return; }
     RPT_LAST=j; renderReport(j);
   });
 }
@@ -1933,9 +1983,10 @@ function loadReportBatch(){
   $('rpBody').innerHTML='<div class="spin">產生中…（整個工地需要一點時間）</div>';
   if($('rpTools'))$('rpTools').innerHTML='';
   api('admin_reportBatch',{site:site,year:yy(),month:mm()}).then(function(j){
-    if(!j.ok){ $('rpBody').innerHTML='<div class="empty">'+esc(j.msg||'產生失敗')+'</div>'; return; }
+    if(!$('rpBody')) return;
+    if(!j.ok){ put('rpBody','<div class="empty">'+esc(j.msg||'產生失敗')+'</div>'); return; }
     if($('rpTools'))$('rpTools').innerHTML='<button class="btn" onclick="window.print()">列印 / PDF（'+j.reports.length+' 頁）</button>';
-    $('rpBody').innerHTML=j.reports.map(function(r){ return '<div class="a4">'+reportHtml(r,false)+'</div>'; }).join('');
+    put('rpBody',j.reports.map(function(r){ return '<div class="a4">'+reportHtml(r,false)+'</div>'; }).join(''));
   });
 }
 function exportReportExcelBatch(){
@@ -2003,7 +2054,8 @@ function baseScreen(which){
     '<div class="toolbar">'+(edit?'<button class="add" onclick="editBase(\''+which+'\',null)">＋ '+meta.add+'</button>':'')+'<input id="baseSearch" placeholder="搜尋" oninput="filterBase()" style="width:190px" class="spacer"></div>'+
     '<div class="panel"><div class="tblwrap" id="baseBody"><div class="spin">載入中…</div></div></div>';
   api('admin_listBase',{}).then(function(j){
-    if(!j.ok){ $('baseBody').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗（需人資或管理員）')+'</div>'; return; }
+    if(!$('baseBody')) return;
+    if(!j.ok){ put('baseBody','<div class="empty">'+esc(j.msg||'讀取失敗（需人資或管理員）')+'</div>'); return; }
     state.base=j.data; renderBase(which,edit);
     if(j.pwFixed) toast('已將 '+j.pwFixed+' 組明碼密碼自動轉為 SHA-256 雜湊');
   });
@@ -2117,52 +2169,83 @@ function delBase(which,idx){ var meta=BASE_META[which], row=state.base[which].ro
 }
 
 /* ===================== 報表匯出（出勤作業）===================== */
-var EXP_KINDS=[['rosterDraft','預訂輪休表','原始排休,不含調休與人資調整'],
-               ['rosterActual','實際輪休表','含調休藍底與人資調整'],
-               ['transfer','調休明細','當月所有調休申請,已退回灰底'],
-               ['report','出勤表','整個範圍每人一頁'],
-               ['punchlog','打卡明細','當月所有打卡原始紀錄']];
+var EXP_KINDS=[
+  ['rosterDraft','預訂輪休表','原始排休，不含調休與人資調整','leave'],
+  ['rosterActual','實際輪休表','含調休藍底與人資調整','roster'],
+  ['transfer','調休明細','當月所有調休申請，已退回灰底','transfer'],
+  ['punchlog','打卡明細','當月所有打卡原始紀錄','punchlog']];
+var EXP_FMT='xlsx';
 function scExport(){
+  EXP_FMT='xlsx';
   var now=new Date();
   var yopts=''; for(var y=now.getFullYear();y>=now.getFullYear()-3;y--) yopts+='<option>'+y+'</option>';
   var mopts=''; for(var m=1;m<=12;m++) mopts+='<option value="'+m+'"'+(m===now.getMonth()+1?' selected':'')+'>'+m+' 月</option>';
   $('main').innerHTML=pageTop('報表匯出',false)+
-    '<div class="panel" style="max-width:680px">'+
-    '<div class="cap7" style="margin-bottom:6px">報表種類（可複選）</div><div id="expKinds" style="margin-bottom:14px">'+
-    EXP_KINDS.map(function(k){return '<label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13.5px">'+
-      '<input type="checkbox" value="'+k[0]+'"'+(k[0]==='rosterActual'?' checked':'')+' style="width:17px;height:17px;accent-color:var(--brand)"> <b>'+k[1]+'</b>'+
-      '<span class="hint">'+k[2]+'</span></label>';}).join('')+'</div>'+
-    '<div class="row2"><div class="field"><label>匯出對象</label><select id="expSite"><option value="__all__">全工地</option></select></div>'+
-    '<div class="field"><label>檔案形式</label><select id="expFmt"><option value="xlsx">Excel（.xlsx）</option><option value="pdf">PDF</option></select></div></div>'+
-    '<div class="row2"><div class="field"><label>年</label><select id="expY">'+yopts+'</select></div>'+
-    '<div class="field"><label>月</label><select id="expM">'+mopts+'</select></div></div>'+
-    '<div class="hint" style="margin:4px 0 12px">會依勾選的種類逐一產生並下載（一種一個檔案）。出勤表包含範圍內每位員工,產生時間較長。</div>'+
-    '<button class="add" id="expGo" onclick="doExport(this)">開始匯出</button>'+
-    '<span class="hint" id="expStat" style="margin-left:12px"></span>'+
+    '<div class="hint" style="margin:-8px 0 12px">勾選報表，選好範圍與格式，一次匯齊。出勤表請至「出勤表」頁匯出。</div>'+
+    '<div class="panel" style="max-width:820px">'+
+    '<div class="cap7">報表種類（點卡片選取，可複選）</div>'+
+    '<div class="exp-grid">'+EXP_KINDS.map(function(k,i){
+      return '<div class="exp-card'+(k[0]==='rosterActual'?' on':'')+'" data-k="'+k[0]+'" onclick="expToggle(this)">'+
+        '<div class="ic">'+(I[k[3]]||'')+'</div>'+
+        '<div><b>'+k[1]+'</b><div class="d">'+k[2]+'</div></div>'+
+        '<div class="tick">✓</div></div>';
+    }).join('')+'</div>'+
+    '<div class="exp-opts">'+
+      '<div class="f"><label>匯出對象</label><select id="expSite" onchange="expSum()"><option value="__all__">全工地</option></select></div>'+
+      '<div class="f"><label>期別</label><select id="expY" onchange="expSum()">'+yopts+'</select> <select id="expM" onchange="expSum()">'+mopts+'</select></div>'+
+      '<div class="f"><label>檔案形式</label><div class="exp-seg">'+
+        '<button type="button" class="on" data-f="xlsx" onclick="expFmt(this)">Excel</button>'+
+        '<button type="button" data-f="pdf" onclick="expFmt(this)">PDF</button></div></div>'+
+    '</div>'+
+    '<div class="exp-foot"><button class="exp-go" id="expGo" onclick="doExport(this)">開始匯出</button>'+
+      '<span class="exp-sum" id="expSum"></span></div>'+
+    '<div class="exp-prog" id="expProg"></div>'+
     '</div>';
-  api('admin_empList',{}).then(function(r){ if(!r.ok)return;
+  api('admin_empList',{}).then(function(r){ if(!r.ok||!$('expSite'))return;
     var st={}; (r.list||[]).forEach(function(e){ if(e.site)st[e.site]=1; });
-    $('expSite').innerHTML='<option value="__all__">全工地</option>'+Object.keys(st).sort().map(function(x){return '<option>'+esc(x)+'</option>';}).join('');
+    put('expSite','<option value="__all__">全工地</option>'+Object.keys(st).sort().map(function(x){return '<option>'+esc(x)+'</option>';}).join(''));
+    expSum();
   });
+  expSum();
+}
+function expToggle(el){ el.classList.toggle('on'); expSum(); }
+function expFmt(btn){
+  EXP_FMT=btn.getAttribute('data-f');
+  Array.prototype.forEach.call(btn.parentNode.querySelectorAll('button'),function(x){ x.classList.toggle('on',x===btn); });
+  expSum();
+}
+function expSel(){ return Array.prototype.map.call(document.querySelectorAll('.exp-card.on'),function(c){return c.getAttribute('data-k');}); }
+function expSum(){
+  var kk=expSel(), go=$('expGo'), sm=$('expSum');
+  if(go){ go.disabled=!kk.length; go.textContent='開始匯出'+(kk.length?('（'+kk.length+'）'):''); }
+  if(sm){
+    var site=$('expSite')?$('expSite').value:'__all__';
+    var y=$('expY')?$('expY').value:'', m=$('expM')?$('expM').value:'';
+    sm.textContent=kk.length?((y-1911)+' 年 '+m+' 月 · '+(site==='__all__'?'全工地':site)+' · '+(EXP_FMT==='pdf'?'PDF':'Excel')):'請先勾選報表';
+  }
 }
 function doExport(btn){
-  var kinds=Array.prototype.map.call(document.querySelectorAll('#expKinds input:checked'),function(i){return i.value;});
-  if(!kinds.length){ alert('請至少勾選一種報表'); return; }
-  var d={site:$('expSite').value,fmt:$('expFmt').value,year:$('expY').value,month:$('expM').value};
-  var names={}; EXP_KINDS.forEach(function(k){ names[k[0]]=k[1]; });
-  var okC=0, fails=[];
+  var kinds=expSel(); if(!kinds.length)return;
+  var names={},icons={}; EXP_KINDS.forEach(function(k){ names[k[0]]=k[1]; });
+  var d={site:$('expSite').value,fmt:EXP_FMT,year:$('expY').value,month:$('expM').value};
+  var prog=$('expProg');
+  prog.className='exp-prog show';
+  prog.innerHTML=kinds.map(function(k){
+    return '<div class="pr" id="ep_'+k+'"><div class="st"><i></i></div><span>'+names[k]+'</span><span class="msg"></span></div>';
+  }).join('');
   bBusy(btn,'匯出中…');
+  var okC=0;
   (function next(i){
     if(i>=kinds.length){
-      bDone(btn); $('expStat').textContent='';
-      var msg='完成 '+okC+' / '+kinds.length+' 個報表';
-      if(fails.length){ alert('部分未完成：\n'+fails.join('\n')); toast(msg,true); } else toast(msg);
+      bDone(btn); expSum();
+      toast(okC===kinds.length?('完成，共 '+okC+' 個檔案'):('完成 '+okC+' / '+kinds.length+' 個'), okC!==kinds.length);
       return;
     }
-    $('expStat').textContent='（'+(i+1)+'/'+kinds.length+'）產生 '+names[kinds[i]]+'…';
+    var row=$('ep_'+kinds[i]); if(row) row.className='pr run';
     api('admin_exportReport',{kind:kinds[i],site:d.site,fmt:d.fmt,year:d.year,month:d.month}).then(function(j){
-      if(j.ok){ okC++; downloadB64(j.b64,j.filename); }
-      else fails.push('・'+names[kinds[i]]+'：'+(j.msg||'失敗'));
+      var r2=$('ep_'+kinds[i]);
+      if(j.ok){ okC++; if(r2){ r2.className='pr ok'; r2.querySelector('.st').textContent='✓'; r2.querySelector('.msg').textContent=j.filename||''; } downloadB64(j.b64,j.filename); }
+      else if(r2){ r2.className='pr bad'; r2.querySelector('.st').textContent='✕'; r2.querySelector('.msg').textContent=j.msg||'失敗'; }
       next(i+1);
     });
   })(0);
@@ -2177,7 +2260,8 @@ function scMaint(){
     '<div class="panel" id="mtBak"><div class="spin">載入中…</div></div>'+
     '</div>';
   api('admin_maintInfo',{}).then(function(j){
-    if(!j.ok){ $('mtArch').innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; $('mtBak').innerHTML=''; return; }
+    if(!$('mtArch')) return;
+    if(!j.ok){ put('mtArch','<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'); put('mtBak',''); return; }
     MAINT_INFO=j; renderMaint(j);
   });
 }
