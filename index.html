@@ -299,7 +299,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-latebnr-01";
+  var APP_VERSION = "2026-09-03-nethang-02";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -380,12 +380,21 @@
       function (o) { ldOff(); return o; },
       function (e) { ldOff(); throw e; });
   }
+  var POST_TIMEOUT = 10000;                    // 行動網路常見「掛住不回」,逾時才能觸發重試
   function _postTry(body, _try) {
     _try = _try || 1;
-    return fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.text(); })
-      .then(function (txt) {
-        var o = null; try { o = JSON.parse(txt); } catch (e) { o = null; }
+    var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = null;
+    var timeout = new Promise(function (_, rej) {
+      timer = setTimeout(function () { if (ac) try { ac.abort(); } catch (e) { } rej(new Error('timeout')); }, POST_TIMEOUT);
+    });
+    var req = fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                               body: JSON.stringify(body), signal: ac ? ac.signal : undefined })
+      .then(function (r) { return r.text(); });
+    return Promise.race([req, timeout])
+      .then(function (t) { clearTimeout(timer); return t; }, function (e) { clearTimeout(timer); throw e; })
+      .then(function (t) {
+        var o = null; try { o = JSON.parse(t); } catch (e) { o = null; }
         if (o) return o;
         throw new Error('bad-json');
       })
@@ -722,8 +731,13 @@
   }
 
   function loadSites() {
-    post({ action: 'sites' }).then(function (res) { sitesData = (res && res.sites) || []; sitesDone = true; buildOptions(); })
-      .catch(function () { sitesDone = true; buildOptions(); });
+    post({ action: 'sites' }).then(function (res) {
+      sitesData = (res && res.sites) || []; sitesDone = true; buildOptions();
+    }).catch(function () {
+      var sel = document.getElementById('siteSel');
+      if (sel) sel.innerHTML = '<option>⚠ 連線不穩，自動重試中…</option>';
+      setTimeout(loadSites, 4000);                     // 不放棄:網路回來就會自己好
+    });
   }
   function jsDist(la1, ln1, la2, ln2) {
     var R = 6371000, tr = Math.PI / 180;
@@ -804,6 +818,12 @@
       var on = document.getElementById('otNote'), ov = on ? on.value.trim() : '';
       if (!ov) { alert('請填寫「加班原因」'); if (on) on.focus(); return; }
       note = note ? (ov + '；' + note) : ov;
+    }
+    if (!isOther) {
+      if (!sitesDone || !sitesData.length) { alert('工地清單載入中，請稍候 1~2 秒再按'); return; }
+      if (pos.lat == null) {                          // GPS 沒抓到就按 → 給選擇,不再默默記成異常
+        if (!confirm('尚未取得手機定位。\n\n要以「無定位」送出嗎？（會標記異常,需主管核准）\n建議先按「重新定位」再打卡。')) return;
+      }
     }
     var reason = isOther ? note : '';                 // 外勤：備註即為事由（用來組成打卡地點）
     var site = '', siteName = '';

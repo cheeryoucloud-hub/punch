@@ -467,7 +467,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-empcache-01";
+  var APP_VERSION = "2026-09-03-nethang-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -518,12 +518,19 @@ function api(action,payload){
   ldOn();
   return _api(action,payload).then(function(o){ ldOff(); return o; },function(e){ ldOff(); throw e; });
 }
+var API_TIMEOUT=20000;                        // 後台匯出較久,逾時放寬到 20 秒
 function _api(action,payload){
   var body=Object.assign({action:action,token:TOKEN},payload||{});
-  return fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
-    .then(function(r){return r.text();}).then(function(t){ var o; try{o=JSON.parse(t);}catch(e){o={ok:false,msg:'回應格式錯誤'};}
+  var ac=(typeof AbortController!=='undefined')?new AbortController():null, timer=null;
+  var timeout=new Promise(function(_,rej){ timer=setTimeout(function(){ if(ac)try{ac.abort();}catch(e){} rej(new Error('timeout')); },
+    /Excel|Report|backup|archive|export/i.test(action)?120000:API_TIMEOUT); });   // 匯出/歸檔類最長 2 分鐘
+  var req=fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),signal:ac?ac.signal:undefined})
+    .then(function(r){return r.text();});
+  return Promise.race([req,timeout])
+    .then(function(t){ clearTimeout(timer); var o; try{o=JSON.parse(t);}catch(e){o={ok:false,msg:'回應格式錯誤'};}
       if(o&&o.msg&&/登入逾時|未登入/.test(o.msg)){ doLogout(); } return o; })
-    .catch(function(){ return {ok:false,msg:'連線失敗,請確認網路或部署網址'}; });
+    .catch(function(e){ clearTimeout(timer);
+      return {ok:false,msg:(String(e).indexOf('timeout')>=0?'連線逾時,請再試一次':'連線失敗,請確認網路或部署網址')}; });
 }
 
 /* ===================== 圖示 ===================== */
