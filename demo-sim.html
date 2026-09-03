@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>啓宇打卡系統 · 打卡流程沙盤</title>
 <script>
-var DEMO_VERSION="2026-09-03-outfix-01";
+var DEMO_VERSION="2026-09-03-latebnr-01";
 (function(){try{
   var cur=new URLSearchParams(location.search).get('_v');
   fetch(location.pathname+'?probe='+Date.now(),{cache:'no-store'})
@@ -455,7 +455,7 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
   }
   function isField() { var s = $('siteSel'); return !!s && s.value === '__other__'; }
   function timeState() {
-    var early = false, lateIn = NOW > '08:30' && NOW <= '17:30', late = NOW > '17:30', fm = isField();
+    var early = false, lateIn = NOW > '08:30' && NOW < '12:00', late = NOW > '17:30', fm = isField();
     var w = $('timeWarn'), nw = $('noteWrap'), nl = $('noteLbl'), nt = $('note');
     if (lateIn) { w.style.display = 'block'; w.textContent = '⏰ 已超過正常上班時間（08:30）。打「上班」請於下方「備註」說明原因（必填）。'; }
     else if (late) { w.style.display = 'block'; w.textContent = '🌙 已超過正常下班時間（17:30）。'; }
