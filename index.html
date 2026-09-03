@@ -299,7 +299,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-nethang-02";
+  var APP_VERSION = "2026-09-03-sitecache-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -374,19 +374,19 @@
   }
   function ldOn() { LOADN++; ldEl().classList.add('on'); }
   function ldOff() { LOADN = Math.max(0, LOADN - 1); if (!LOADN) ldEl().classList.remove('on'); }
-  function post(body) {
+  function post(body, tmo) {
     ldOn();
-    return _postTry(body, 1).then(
+    return _postTry(body, 1, tmo).then(
       function (o) { ldOff(); return o; },
       function (e) { ldOff(); throw e; });
   }
   var POST_TIMEOUT = 10000;                    // 行動網路常見「掛住不回」,逾時才能觸發重試
-  function _postTry(body, _try) {
+  function _postTry(body, _try, tmo) {
     _try = _try || 1;
     var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var timer = null;
     var timeout = new Promise(function (_, rej) {
-      timer = setTimeout(function () { if (ac) try { ac.abort(); } catch (e) { } rej(new Error('timeout')); }, POST_TIMEOUT);
+      timer = setTimeout(function () { if (ac) try { ac.abort(); } catch (e) { } rej(new Error('timeout')); }, tmo || POST_TIMEOUT);
     });
     var req = fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                                body: JSON.stringify(body), signal: ac ? ac.signal : undefined })
@@ -399,7 +399,7 @@
         throw new Error('bad-json');
       })
       .catch(function (e) {
-        if (_try < 3) return new Promise(function (res) { setTimeout(res, 600 * _try); }).then(function () { return _postTry(body, _try + 1); });
+        if (_try < 3) return new Promise(function (res) { setTimeout(res, 600 * _try); }).then(function () { return _postTry(body, _try + 1, tmo); });
         throw new Error('伺服器忙碌或連線不穩，請再按一次');
       });
   }
@@ -730,13 +730,28 @@
     loadSites();
   }
 
+  var SITES_CK = 'qy_sites_v1';
   function loadSites() {
-    post({ action: 'sites' }).then(function (res) {
-      sitesData = (res && res.sites) || []; sitesDone = true; buildOptions();
+    // 先用上次的清單秒開（工地座標極少變動）,同時背景抓最新
+    try {
+      var c = JSON.parse(localStorage.getItem(SITES_CK) || 'null');
+      if (c && c.list && c.list.length) { sitesData = c.list; sitesDone = true; buildOptions(); }
+    } catch (e) { }
+    fetchSites();
+  }
+  function fetchSites() {
+    post({ action: 'sites' }, 6000).then(function (res) {          // 6 秒逾時,失敗快轉重試
+      var list = (res && res.sites) || [];
+      if (!list.length && sitesDone) return;                       // 伺服器回空但有快取 → 保留快取
+      sitesData = list; sitesDone = true;
+      try { localStorage.setItem(SITES_CK, JSON.stringify({ t: Date.now(), list: list })); } catch (e) { }
+      buildOptions();
     }).catch(function () {
-      var sel = document.getElementById('siteSel');
-      if (sel) sel.innerHTML = '<option>⚠ 連線不穩，自動重試中…</option>';
-      setTimeout(loadSites, 4000);                     // 不放棄:網路回來就會自己好
+      if (!sitesDone) {                                            // 完全沒清單才顯示重試中;有快取就默默補抓
+        var sel = document.getElementById('siteSel');
+        if (sel) sel.innerHTML = '<option>⚠ 連線不穩，自動重試中…</option>';
+      }
+      setTimeout(fetchSites, 3000);
     });
   }
   function jsDist(la1, ln1, la2, ln2) {
