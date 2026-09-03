@@ -467,7 +467,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-nethang-01";
+  var APP_VERSION = "2026-09-04-keyin-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -810,7 +810,9 @@ function scPunchLog(){
     '<select id="plName" onchange="plSet(\'name\',this.value)"><option value="">全部人員</option></select>'+
     '<select id="plType" onchange="plSet(\'type\',this.value)">'+['','上班','下班','加班結束'].map(function(x){return '<option value="'+x+'"'+(PLOG.type===x?' selected':'')+'>'+(x||'全部類型')+'</option>';}).join('')+'</select>'+
     '<select id="plMethod" onchange="plSet(\'method\',this.value)">'+['','定點','外勤','補打'].map(function(x){return '<option value="'+x+'"'+(PLOG.method===x?' selected':'')+'>'+(x||'全部方式')+'</option>';}).join('')+'</select>'+
-    '<span class="spacer"></span><span class="hint" id="plCount"></span></div>'+
+    '<span class="spacer"></span>'+
+    (isHR()?'<button class="add" onclick="addPunchRow()">＋ 新增補登</button>':'')+
+    '<span class="hint" id="plCount"></span></div>'+
     '<div id="plBody"><div class="panel"><div class="spin">載入中…</div></div></div>';
   loadPunchLog();
 }
@@ -874,6 +876,35 @@ function loadPunchLog(){
       h+='</tbody></table></div></div>';
     });
     b.innerHTML=h;
+  });
+}
+/* 手動補登：LINE 打不了卡時,人資依 LINE 對話紀錄 KEY 單 */
+function addPunchRow(){
+  getEmps(false,function(list){
+    if(!list){ toast('員工名單載入失敗',true); return; }
+    var opts=list.map(function(e){return '<option value="'+esc(e.empId)+'">'+esc(e.name)+'（'+esc(e.site||'—')+'）</option>';}).join('');
+    var d=PLOG.date.replace(/[/]/g,'-');
+    modal('手動補登打卡',
+      '<div class="row2"><div class="field"><label>員工</label><select id="kEmp"><option value="">選擇員工…</option>'+opts+'</select></div>'+
+      '<div class="field"><label>類型</label><select id="kType"><option>上班</option><option>下班</option><option>加班結束</option></select></div></div>'+
+      '<div class="row2"><div class="field"><label>日期</label><input type="date" id="kDate" value="'+d+'"></div>'+
+      '<div class="field"><label>時間</label><input type="time" id="kTime"></div></div>'+
+      '<div class="field"><label>補登依據（必填）</label><input id="kBasis" placeholder="例：LINE 對話 9/4 08:02 回報打卡頁打不開"></div>'+
+      '<div class="field"><label>備註（選填）</label><input id="kNote" placeholder="例：晚到原因、外勤說明"></div>'+
+      '<div class="hint">將以「方式＝補打、狀態＝已核准」寫入,核准人記你的名字,備註保留補登依據以備查。</div>',
+      function(){
+        var emp=$('kEmp').value, dt=$('kDate').value, tm=$('kTime').value, basis=($('kBasis').value||'').trim();
+        if(!emp){ toast('請選擇員工',true); return; }
+        if(!dt||!tm){ toast('請選日期與時間',true); return; }
+        if(!basis){ toast('請填寫補登依據',true); return; }
+        busyOn('補登中…');
+        api('admin_addPunchRow',{empId:emp,dt:dt.replace(/-/g,'/')+' '+tm,type:$('kType').value,basis:basis,note:$('kNote').value}).then(function(j){
+          busyOff();
+          if(!j.ok){ toast(j.msg||'補登失敗',true); return; }
+          closeModal(); toast('已補登');
+          PLOG.date=dt.replace(/-/g,'/'); plSetDate(dt);      // 跳到該天,馬上看得到這筆
+        });
+      });
   });
 }
 function openLogMap(i){
