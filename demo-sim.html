@@ -6,12 +6,12 @@
 <meta name="robots" content="noindex,nofollow">
 <title>啓宇打卡系統 · 打卡流程沙盤</title>
 <script>
-var DEMO_VERSION="2026-09-03-latebnr-01";
+var DEMO_VERSION="2026-09-04-mkup-01";
 (function(){try{
   var cur=new URLSearchParams(location.search).get('_v');
   fetch(location.pathname+'?probe='+Date.now(),{cache:'no-store'})
     .then(function(r){return r.text();}).then(function(t){
-      var m=t.match(/DEMO_VERSION="([^"]+)"/); if(!m)return;
+      var m=t.match(/DEMO_VERSION="2026-09-04-mkup-01"]+)"/); if(!m)return;
       if(m[1]===DEMO_VERSION)return;
       if(cur===m[1])return;
       var u=new URL(location.href); u.searchParams.set('_v',m[1]);
@@ -313,6 +313,15 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
     font-size:11px; color:#9aa8a2; font-weight:800; font-family:inherit; }
 #phone .tabbar .t.on{ color:var(--teal); }
 #phone .tabbar .t svg{ width:21px; height:21px; }
+#phone .mkquick{ display:flex; gap:10px; margin-top:9px; }
+#phone .mkquick .qk{ flex:1; border:1.4px solid var(--line); background:#fff; color:var(--ink); border-radius:11px;
+  padding:11px 0; font-size:15px; font-weight:800; font-family:inherit; font-variant-numeric:tabular-nums; }
+#phone .mkquick .qk.on{ background:var(--teal); border-color:var(--teal); color:#fff; }
+#phone .mkbtns{ display:flex; gap:12px; margin-top:18px; }
+#phone .mkgo{ flex:1; border:none; border-radius:13px; padding:15px 0; font-size:16px; font-weight:800; font-family:inherit; }
+#phone .mkgo.in{ background:var(--teal); color:#fff; box-shadow:0 8px 16px rgba(14,124,102,.20); }
+#phone .mkgo.out{ background:#fff; color:var(--amber); border:1.6px solid #F0D9AC; }
+#phone .mkgo:disabled{ opacity:.5; }
 </style>
 
 <div class="page">
@@ -468,14 +477,29 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
   }
   function drawMakeup() {
     $('scr').innerHTML = '<div class="hdr"><h1>補打卡</h1><p>需直屬主管／工地負責人核准</p></div><div class="pbody">' +
-      '<label class="lbl">類型</label><select id="mkType" class="fld"><option value="上班">上班補打</option><option value="下班">下班補打</option></select>' +
       '<label class="lbl">日期</label><input type="date" id="mkDate" class="fld" value="2026-09-01" max="2026-09-01">' +
-      '<label class="lbl">時間</label><input type="time" id="mkTime" class="fld" value="08:00">' +
+      '<label class="lbl">時間（可手動選，或用下方快速鍵）</label><input type="time" id="mkTime" class="fld" value="08:00">' +
+      '<div class="mkquick">' +
+        '<button type="button" class="qk" id="mkQ8">8:00</button>' +
+        '<button type="button" class="qk" id="mkQ17">17:00</button>' +
+      '</div>' +
       '<label class="lbl">補打原因（必填）</label><input id="mkReason" class="fld" placeholder="例：忘記打上班卡">' +
-      '<button class="primary" id="mkBtn">送出補打申請</button>' +
+      '<div class="mkbtns">' +
+        '<button class="mkgo in" id="mkBtnIn">補打上班</button>' +
+        '<button class="mkgo out" id="mkBtnOut">補打下班</button>' +
+      '</div>' +
       '<div class="miniwarn">送出後會通知主管，核准後才會生效。</div>' +
       '<div class="result" id="result"></div></div>';
-    $('mkBtn').onclick = makeup;
+    $('mkBtnIn').onclick = function () { makeup('上班'); };
+    $('mkBtnOut').onclick = function () { makeup('下班'); };
+    $('mkQ8').onclick = function () { mkQuick(this, '08:00'); };
+    $('mkQ17').onclick = function () { mkQuick(this, '17:00'); };
+  }
+  function mkQuick(btn, hm) {
+    var t = $('mkTime'), on = btn.classList.contains('on');
+    $('mkQ8').classList.remove('on'); $('mkQ17').classList.remove('on');
+    if (on) { t.disabled = false; return; }
+    btn.classList.add('on'); t.value = hm; t.disabled = true;
   }
   function result(ok, txt) {
     var el = $('result'); if (!el) return;
@@ -528,8 +552,8 @@ table.rpt td.l{ text-align:left; padding-left:6px; }
       dt: DATE + ' ' + NOW, type: type, method: method, place: place, geo: geo, dist: dist,
       status: status, note: note, lat: lat, lng: lng, appr: '' };
   }
-  function makeup() {
-    var type = $('mkType').value, date = $('mkDate').value, time = $('mkTime').value;
+  function makeup(type) {
+    var date = $('mkDate').value, time = $('mkTime').value;
     var reason = $('mkReason').value.trim();
     if (!date) { alert('請選補打日期'); return; }
     if (!time) { alert('請選補打時間'); return; }
