@@ -97,6 +97,17 @@
   .primary{ width:100%; border:none; border-radius:13px; padding:15px 0; font-size:16px; font-weight:800; color:#fff;
     background:var(--teal); font-family:inherit; margin-top:18px; box-shadow:0 8px 16px rgba(14,124,102,.20); }
   .primary:disabled{ opacity:.5; }
+  .mkquick{ display:flex; gap:10px; margin-top:9px; }
+  .mkquick .qk{ flex:1; border:1.4px solid var(--line); background:#fff; color:var(--ink); border-radius:11px;
+    padding:11px 0; font-size:15px; font-weight:800; font-family:inherit;
+    font-variant-numeric:tabular-nums; }
+  .mkquick .qk.on{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  .mkbtns{ display:flex; gap:12px; margin-top:18px; }
+  .mkgo{ flex:1; border:none; border-radius:13px; padding:15px 0; font-size:16px; font-weight:800;
+    font-family:inherit; }
+  .mkgo.in{ background:var(--teal); color:#fff; box-shadow:0 8px 16px rgba(14,124,102,.20); }
+  .mkgo.out{ background:#fff; color:var(--amber); border:1.6px solid #F0D9AC; }
+  .mkgo:disabled{ opacity:.5; }
   .miniwarn{ font-size:12px; color:var(--teal-d); background:var(--teal-soft); border-radius:11px; padding:9px 12px; margin-top:10px; font-weight:600; }
 
   .btns{ display:flex; gap:12px; margin-top:16px; }
@@ -299,7 +310,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-wsafe-01";
+  var APP_VERSION = "2026-09-04-mkup-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -408,6 +419,18 @@
       });
   }
 
+  /* 預抓：公告與本月班表若本地沒快取,背景先抓一份 —— 之後點分頁就是秒開。
+     有快取就不重複抓(該頁自己進場時會背景更新)。 */
+  function warmPages() {
+    try {
+      if (P.view !== 'notice' && !lcGet('ntc'))
+        post({ action: 'notices', idToken: me.idToken }).then(function (r) { if (r && r.ok) lcSet('ntc', r); }).catch(function () { });
+      var d = new Date(), ck = 'sc_' + d.getFullYear() + '_' + (d.getMonth() + 1) + '_' + (typeof VIEW_AS !== 'undefined' ? VIEW_AS : '');
+      if (P.view !== 'schedule' && !lcGet(ck))
+        post({ action: 'schedule', idToken: me.idToken, year: d.getFullYear(), month: d.getMonth() + 1, viewAs: '' })
+          .then(function (r) { if (r && r.ok) lcSet(ck, r); }).catch(function () { });
+    } catch (e) { }
+  }
   /* ===== 底部分頁（純導覽：點了才載入該頁，不預載） ===== */
   var ICON = {
     punch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21V13h6v8M4 10l8-6 8 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg>',
@@ -603,6 +626,7 @@
     else if (P.view === 'schedule') startSchedule();
     else if (P.view === 'notice') startNotice();
     else startPunch();
+    setTimeout(warmPages, 1500);                      // 預抓公告/班表:等落地頁先載完
     post({ action: 'whoami', idToken: me.idToken }).then(function (w) {
       if (w && w.ok && !w.bound) startBind(w);
     }).catch(function () {});
@@ -910,33 +934,51 @@
     var today = nowD.getFullYear() + '-' + ('0' + (nowD.getMonth() + 1)).slice(-2) + '-' + ('0' + nowD.getDate()).slice(-2);
     document.getElementById('wrap').innerHTML = '<div class="hdr"><h1>補打卡</h1><p>需直屬主管／工地負責人核准</p></div>' +
       '<div class="pbody">' +
-      '<label class="lbl">類型</label><select id="mkType" class="fld"><option value="上班">上班補打</option><option value="下班">下班補打</option></select>' +
       '<label class="lbl">日期</label><input type="date" id="mkDate" class="fld" value="' + today + '" max="' + today + '">' +
-      '<label class="lbl">時間</label><input type="time" id="mkTime" class="fld" value="' + t + '">' +
+      '<label class="lbl">時間（可手動選，或用下方快速鍵）</label><input type="time" id="mkTime" class="fld" value="' + t + '">' +
+      '<div class="mkquick">' +
+        '<button type="button" class="qk" id="mkQ8" onclick="mkQuick(this,\'08:00\')">8:00</button>' +
+        '<button type="button" class="qk" id="mkQ17" onclick="mkQuick(this,\'17:00\')">17:00</button>' +
+      '</div>' +
       '<label class="lbl">補打原因（必填）</label><input id="mkReason" class="fld" placeholder="例：忘記打上班卡">' +
-      '<button class="primary" id="mkBtn">送出補打申請</button>' +
+      '<div class="mkbtns">' +
+        '<button class="mkgo in" id="mkBtnIn">補打上班</button>' +
+        '<button class="mkgo out" id="mkBtnOut">補打下班</button>' +
+      '</div>' +
       '<div class="miniwarn">送出後會通知主管，核准後才會生效。</div>' +
       '<div class="result" id="result"></div></div>' + tabBar('makeup');
-    document.getElementById('mkBtn').onclick = makeup;
+    document.getElementById('mkBtnIn').onclick = function () { makeup('上班', this); };
+    document.getElementById('mkBtnOut').onclick = function () { makeup('下班', this); };
   }
-  function makeup() {
-    var type = document.getElementById('mkType').value;
+  /* 快速鍵：按 8:00 / 17:00 直接帶入並鎖住時間欄;再按一次解鎖回手動 */
+  function mkQuick(btn, hm) {
+    var t = document.getElementById('mkTime');
+    var on = btn.classList.contains('on');
+    document.getElementById('mkQ8').classList.remove('on');
+    document.getElementById('mkQ17').classList.remove('on');
+    if (on) { t.disabled = false; return; }               // 再按一次 → 解鎖手動選
+    btn.classList.add('on');
+    t.value = hm; t.disabled = true;
+  }
+  function makeup(type, btn) {
     var date = document.getElementById('mkDate').value;
     var time = document.getElementById('mkTime').value;
     var reason = document.getElementById('mkReason').value.trim();
     if (!date) { alert('請選補打日期'); return; }
     if (!time) { alert('請選補打時間'); return; }
     if (!reason) { alert('請填補打原因'); return; }
-    var mb = document.getElementById('mkBtn');
+    var mb = btn;
+    var other = document.getElementById(type === '上班' ? 'mkBtnOut' : 'mkBtnIn');
+    if (other) other.disabled = true;
     bBusy(mb, '送出中…'); ovBusy('補打申請送出中…請稍候');
     post({ action: 'makeup', idToken: me.idToken, punchType: type, makeupDate: date, makeupTime: time, reason: reason, device: navigator.platform + ' / LINE' }, { tmo: 45000, noRetry: true })
       .then(function (res) {
         ovBusyOff();
-        if (!res || !res.ok) { bDone(mb); showResult(false, (res && res.msg) || '補打失敗'); return; }
+        if (!res || !res.ok) { bDone(mb); if (other) other.disabled = false; showResult(false, (res && res.msg) || '補打失敗'); return; }
         bDone(mb, true); ovToast('補打申請已送出');
         showResult(true, '補打申請已送出（' + (res.date || date) + ' ' + type + '補打 ' + res.time + '），待主管核准');
         sendFlexMsg(buildMakeupFlex(type, (res.date || date) + ' ' + res.time, reason)).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1600); });
-      }).catch(function (e) { ovBusyOff(); bDone(mb); showResult(false, '送出失敗：' + e); });
+      }).catch(function (e) { ovBusyOff(); bDone(mb); if (other) other.disabled = false; showResult(false, '送出失敗：' + e); });
   }
   function sendFlexMsg(flex) {
     try {
