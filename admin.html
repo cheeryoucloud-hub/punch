@@ -422,7 +422,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-protect-01";
+  var APP_VERSION = "2026-09-03-tfxls-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -1331,7 +1331,8 @@ function scTransfer(){
     '<div style="text-align:right;margin-top:12px"><button class="add" id="tfSubmit" onclick="submitTf()" style="padding:10px 26px;font-size:14px">送出申請</button></div></div>'+
     '<div class="toolbar"><b style="font-size:15px">申請紀錄</b><span class="tfstat" id="tfStat"></span><span class="spacer"></span>'+mstep()+
       '<select id="tfSite"><option value="__all__">全部工地</option></select>'+
-      '<select id="tfStatusSel" onchange="tfFilter(this.value)"><option value="">全部狀態</option><option value="待核准">待審核</option><option value="已核准">已核准</option><option value="已退回">已退回</option></select></div>'+
+      '<select id="tfStatusSel" onchange="tfFilter(this.value)"><option value="">全部狀態</option><option value="待核准">待審核</option><option value="已核准">已核准</option><option value="已退回">已退回</option></select>'+
+      '<button class="btn" id="tfXls" onclick="tfExportExcel(this)">匯出當月明細 Excel</button></div>'+
     '<div id="trBody"><div class="spin">載入中…</div></div>';
   api('admin_empList',{}).then(function(j){ if(!j.ok)return;
     state.tfEmps=j.list;
@@ -1456,6 +1457,14 @@ function actTr(id,dec,stage){
     else if(j.done){ toast('兩方都簽好了,調休已生效'); }
     else { toast('已簽核,還在等'+(j.waiting||'另一方')); }
     loadTransfer();
+  });
+}
+function tfExportExcel(btn){
+  bBusy(btn,'產生中…'); busyOn('產生調休明細 Excel 中…');
+  api('admin_transferExcel',{ym:ymDash(),site:$('tfSite')?$('tfSite').value:'__all__'}).then(function(j){
+    busyOff(); bDone(btn);
+    if(!j.ok){ alert(j.msg||'匯出失敗'); return; }
+    toast('已匯出 '+j.total+' 筆'); downloadB64(j.b64,j.filename);
   });
 }
 function delTf(id,name){

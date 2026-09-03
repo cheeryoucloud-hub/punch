@@ -62,6 +62,16 @@
   #errBar button{ font-family:inherit; font-size:12.5px; font-weight:800; padding:6px 13px;
     border:0; border-radius:8px; background:#fff; color:#A5382A; cursor:pointer; white-space:nowrap; }
   .olderhint{ font-size:12.5px; color:var(--muted); line-height:1.7; margin:-4px 0 10px; }
+  .bselw{ display:inline-flex; align-items:center; margin-right:8px; padding:2px; }
+  .row .bselw + b{ margin-right:auto; }   /* 有勾選框時姓名仍靠左,狀態標籤靠右 */
+  .bsel{ width:19px; height:19px; accent-color:var(--teal); }
+  .batchbar{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:#fff; border:1.4px solid var(--teal); border-radius:12px; padding:9px 13px; margin-bottom:12px; }
+  .batchbar label{ display:flex; align-items:center; gap:7px; font-size:13.5px; font-weight:700; color:var(--teal-d); }
+  .batchbar input{ width:18px; height:18px; accent-color:var(--teal); }
+  #ovBatchGo{ border:none; background:var(--teal); color:#fff; font-family:inherit; font-size:13.5px;
+    font-weight:800; padding:9px 16px; border-radius:10px; }
+  #ovBatchGo:disabled{ opacity:.35; }
   h3.ovsub{ font-size:13px; font-weight:800; color:var(--muted); margin:14px 0 7px; letter-spacing:.02em; }
   .sgbar{ display:flex; gap:8px; flex-wrap:wrap; margin-top:7px; }
   .sgc{ font-size:11.5px; font-weight:700; color:var(--muted); background:#F4F6F5; border-radius:8px; padding:4px 9px; }
@@ -289,7 +299,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-latedef-01";
+  var APP_VERSION = "2026-09-03-latein-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -672,8 +682,8 @@
     var warn = document.getElementById('timeWarn'); if (!warn) return;
     var nl = document.getElementById('noteLbl'), nt = document.getElementById('note');
     var lw = document.getElementById('lateWork'), lwrap = document.getElementById('lateWrap'), t = nowHM();
-    var early = t < '07:30', late = t > '17:30';
-    if (early) { warn.style.display = 'block'; warn.textContent = '⏰ 非正常上班時間（早到）。請於下方「備註」說明原因（必填）。'; }
+    var lateIn = t > '08:30' && t <= '17:30', late = t > '17:30';   // 早到不再限制,可直接打卡
+    if (lateIn) { warn.style.display = 'block'; warn.textContent = '⏰ 已超過正常上班時間（08:30）。打「上班」請於下方「備註」說明原因（必填）。'; }
     else if (late) { warn.style.display = 'block'; warn.textContent = '🌙 已超過正常下班時間（17:30）。'; }
     else { warn.style.display = 'none'; }
     var fieldMode = isFieldMode();
@@ -683,9 +693,9 @@
     // 17:30 後改用「晚退原因」下拉,備註欄收起來（外勤仍需填地點／事由,所以保留）
     if (nw) nw.style.display = (late && !fieldMode) ? 'none' : 'block';
     if (nl) nl.textContent = fieldMode ? '備註（外勤地點／事由，必填）'
-      : (early ? '備註（早到必填）' : '備註（選填）');
+      : (lateIn ? '備註（晚到打「上班」必填）' : '備註（選填）');
     if (nt) nt.placeholder = fieldMode ? '例：送件市政府 / 拜訪業主'
-      : (early ? '例：提早到工地準備機具' : '例：交通延誤，遲到 10 分');
+      : '例：交通延誤，遲到 10 分';
   }
   function startClock() {
     function tick() { var el = document.getElementById('clock'); if (el) { var n = new Date(); el.textContent = ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2); } refreshTimeState(); }
@@ -779,7 +789,10 @@
     var t = nowHM();
     var ne = document.getElementById('note');
     if (isOther && !note) { alert('外勤打卡請於「備註」填寫地點／事由'); if (ne) ne.focus(); return; }
-    if (type === '上班' && t < '07:30' && !note) { alert('非正常上班時間（早到）,請於「備註」說明原因'); if (ne) ne.focus(); return; }
+    if (type === '上班' && t > '08:30' && !note) {                 // 晚到必填原因;若備註欄被晚退模式收起,先展開
+      if (nwEl && nwEl.style.display === 'none') { nwEl.style.display = 'block'; }
+      alert('已超過正常上班時間（08:30）,請於「備註」說明晚到原因'); if (ne) ne.focus(); return;
+    }
     if (type === '下班' && t > '17:30') {                       // 晚退：必選原因,併入備註
       var ls = document.getElementById('lateSel'), lv = ls ? ls.value : '';
       if (!lv) { alert('請選擇「晚退原因」'); if (ls) ls.focus(); return; }   // 有預設值,正常不會進來
@@ -1231,9 +1244,13 @@
     }
     return '<div class="sgbar">' + one('工地負責人', x.bossSign, 'boss') + one('工地主管', x.mgrSign, 'mgr') + '</div>';
   }
+  function ovSel(x, kind) {
+    if (!x.canAct) return '';
+    return '<label class="bselw"><input type="checkbox" class="bsel" data-kind="' + kind + '" data-id="' + esc(kind === 'transfer' ? x.id : x.recordId) + '"></label>';
+  }
   function ovTfCard(x) {
     var line = ovMd(x.orig) + '（' + ovSlot(x.origAM, x.origPM) + '）→ ' + ovMd(x.neu) + '（' + ovSlot(x.newAM, x.newPM) + '）';
-    return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
+    return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row">' + ovSel(x, 'transfer') + '<b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
       '<div class="muted">' + esc(line) + '</div>' +
       (x.reason ? '<div class="muted">理由：' + esc(x.reason) + '</div>' : '') +
       ovSignBar(x) +
@@ -1333,7 +1350,7 @@
       if (ml) loc += '<div style="margin-top:4px">' + ml + '</div>';
       else if (x.geo === '無定位') loc += '<div class="muted" style="margin-top:4px">（手機未取得定位,無座標可查）</div>';
     }
-    return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
+    return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row">' + ovSel(x, 'punch') + '<b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
       '<div class="muted">' + esc(x.date + ' ' + x.time + '　' + x.punchType) + typeTxt + '</div>' +
       loc +
       (x.reason ? '<div class="muted">備註：' + esc(x.reason) + '</div>' : '') +
@@ -1351,7 +1368,10 @@
     var act = all.filter(function (x) { return x.canAct; }).length;
     var h = '<h2>待核准 <span class="tag wait">' + all.length + ' 筆</span>' +
             (act ? ' <span class="tag wait">待你簽核 ' + act + '</span>' : '') + '</h2>' +
-            '<div class="olderhint">不分日期,一直列到核准或退回為止。</div><div id="ovPend">';
+            '<div class="olderhint">不分日期,一直列到核准或退回為止。</div>' +
+            (act > 1 ? ('<div class="batchbar"><label><input type="checkbox" id="ovSelAll"> 全選待你簽核的</label>' +
+              '<button id="ovBatchGo" disabled>一次核准（0）</button></div>') : '') +
+            '<div id="ovPend">';
     g.forEach(function (x) {
       if (!x[2].length) return;
       h += '<h3 class="ovsub">' + x[1] + '（' + x[2].length + '）</h3>';
@@ -1416,6 +1436,39 @@
       Array.prototype.forEach.call(document.querySelectorAll('.sitegrp'), function (el) {
         el.style.display = (v === '__all__' || el.getAttribute('data-site') === v) ? '' : 'none';
       });
+    };
+    // 批次勾選
+    function bcount() {
+      var c = document.querySelectorAll('#ovPend .bsel:checked').length;
+      var go = document.getElementById('ovBatchGo');
+      if (go) { go.disabled = !c; go.textContent = '一次核准（' + c + '）'; }
+      return c;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('#ovPend .bsel'), function (cb) { cb.onchange = bcount; });
+    var selAll = document.getElementById('ovSelAll');
+    if (selAll) selAll.onchange = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('#ovPend .bsel'), function (cb) { cb.checked = selAll.checked; });
+      bcount();
+    };
+    var goBtn = document.getElementById('ovBatchGo');
+    if (goBtn) goBtn.onclick = function () {
+      var items = Array.prototype.map.call(document.querySelectorAll('#ovPend .bsel:checked'), function (cb) {
+        return { kind: cb.getAttribute('data-kind'), id: cb.getAttribute('data-id') };
+      });
+      if (!items.length) return;
+      if (!confirm('確定一次核准這 ' + items.length + ' 件申請?')) return;
+      bBusy(goBtn, '核准中…'); ovBusy('批次核准中…（' + items.length + ' 件）');
+      post({ action: 'approveBatch', idToken: me.idToken, items: items }).then(function (res) {
+        ovBusyOff();
+        if (!res || !res.ok) { bDone(goBtn); ovToast('批次核准失敗：' + ((res && res.msg) || ''), true); return; }
+        var msg = '已核准 ' + res.okCount + ' / ' + res.total + ' 件';
+        if (res.fails && res.fails.length) {
+          msg += '，失敗 ' + res.fails.length + ' 件';
+          alert('部分未成功：\n' + res.fails.map(function (f) { return '・' + f.id + '：' + (f.msg || '') ; }).join('\n'));
+        }
+        ovToast(msg);
+        ovSilentRefresh();
+      }).catch(function (e) { ovBusyOff(); bDone(goBtn); ovToast('批次核准失敗：' + e, true); ovSilentRefresh(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('.pbtns button'), function (b) {
       if (b.getAttribute('data-del')) { b.onclick = function () { ovDelTf(b.getAttribute('data-del'), b); }; return; }
