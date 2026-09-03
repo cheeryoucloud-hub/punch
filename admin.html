@@ -422,7 +422,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-tfxls-01";
+  var APP_VERSION = "2026-09-03-export-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -497,13 +497,14 @@ var I={
   sun:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M19 5l-1 1M6 18l-1 1"/></svg>',
   remind:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
   maint:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>',
+  export:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
   theme:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c-5 0-9-4-9-9z"/></svg>'
 };
 var NAV=[
   {k:'notice',t:'公司公告',g:'人資管理'},{k:'remind',t:'LINE提醒',g:'人資管理'},
   {k:'overview',t:'總覽',g:'打卡作業'},{k:'punch',t:'打卡申請',g:'打卡作業'},{k:'punchlog',t:'打卡明細',g:'打卡作業'},
   {k:'leave',t:'休假登錄',g:'出勤作業'},{k:'transfer',t:'調休申請',g:'出勤作業'},
-  {k:'roster',t:'輪休表',g:'出勤作業'},{k:'report',t:'出勤表',g:'出勤作業'},
+  {k:'roster',t:'輪休表',g:'出勤作業'},{k:'report',t:'出勤表',g:'出勤作業'},{k:'export',t:'報表匯出',g:'出勤作業'},
   {k:'emp',t:'員工名冊',g:'基本資料'},{k:'site',t:'工地資料',g:'基本資料'},
   {k:'geo',t:'打卡座標',g:'基本資料'},{k:'acct',t:'帳號權限',g:'基本資料'},
   {k:'maint',t:'年度歸檔／備份',g:'資料維護'}
@@ -513,8 +514,8 @@ function viewAll(){ return ME.role==='管理員'||ME.role==='人資'||ME.role===
 function allowScreens(){
   var r=ME.role;
   // 人資管理（公司公告／LINE提醒）只開給管理員與人資
-  if(r==='管理員') return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo','acct','maint'];
-  if(r==='人資')   return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo','acct'];
+  if(r==='管理員') return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','export','emp','site','geo','acct','maint'];
+  if(r==='人資')   return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','export','emp','site','geo','acct'];
   if(r==='主管') return ['overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo'];
   if(r==='工地負責人') return ['overview','punch','punchlog','leave','transfer','roster'];
   return ['overview'];
@@ -569,7 +570,7 @@ function rocTitle(){ return '啓宇營造工程股份有限公司　'+(yy()-1911
 
 /* ===================== 派發 ===================== */
 function render(){
-  var scr={overview:scOverview,punch:scPunch,punchlog:scPunchLog,notice:scNotice,remind:scRemind,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct,maint:scMaint}[state.screen];
+  var scr={overview:scOverview,punch:scPunch,punchlog:scPunchLog,notice:scNotice,remind:scRemind,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct,maint:scMaint,export:scExport}[state.screen];
   if(scr) scr();
 }
 
@@ -2113,6 +2114,58 @@ function delBase(which,idx){ var meta=BASE_META[which], row=state.base[which].ro
   if(!confirm('確定刪除「'+key+'」?此動作無法復原'))return;
   busyOn('刪除中…');
   api('admin_deleteRow',{sheet:which,key:key}).then(function(j){ busyOff(); if(!j.ok){alert(j.msg||'刪除失敗');return;} toast('已刪除'); baseScreen(which); });
+}
+
+/* ===================== 報表匯出（出勤作業）===================== */
+var EXP_KINDS=[['rosterDraft','預訂輪休表','原始排休,不含調休與人資調整'],
+               ['rosterActual','實際輪休表','含調休藍底與人資調整'],
+               ['transfer','調休明細','當月所有調休申請,已退回灰底'],
+               ['report','出勤表','整個範圍每人一頁'],
+               ['punchlog','打卡明細','當月所有打卡原始紀錄']];
+function scExport(){
+  var now=new Date();
+  var yopts=''; for(var y=now.getFullYear();y>=now.getFullYear()-3;y--) yopts+='<option>'+y+'</option>';
+  var mopts=''; for(var m=1;m<=12;m++) mopts+='<option value="'+m+'"'+(m===now.getMonth()+1?' selected':'')+'>'+m+' 月</option>';
+  $('main').innerHTML=pageTop('報表匯出',false)+
+    '<div class="panel" style="max-width:680px">'+
+    '<div class="cap7" style="margin-bottom:6px">報表種類（可複選）</div><div id="expKinds" style="margin-bottom:14px">'+
+    EXP_KINDS.map(function(k){return '<label style="display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:13.5px">'+
+      '<input type="checkbox" value="'+k[0]+'"'+(k[0]==='rosterActual'?' checked':'')+' style="width:17px;height:17px;accent-color:var(--brand)"> <b>'+k[1]+'</b>'+
+      '<span class="hint">'+k[2]+'</span></label>';}).join('')+'</div>'+
+    '<div class="row2"><div class="field"><label>匯出對象</label><select id="expSite"><option value="__all__">全工地</option></select></div>'+
+    '<div class="field"><label>檔案形式</label><select id="expFmt"><option value="xlsx">Excel（.xlsx）</option><option value="pdf">PDF</option></select></div></div>'+
+    '<div class="row2"><div class="field"><label>年</label><select id="expY">'+yopts+'</select></div>'+
+    '<div class="field"><label>月</label><select id="expM">'+mopts+'</select></div></div>'+
+    '<div class="hint" style="margin:4px 0 12px">會依勾選的種類逐一產生並下載（一種一個檔案）。出勤表包含範圍內每位員工,產生時間較長。</div>'+
+    '<button class="add" id="expGo" onclick="doExport(this)">開始匯出</button>'+
+    '<span class="hint" id="expStat" style="margin-left:12px"></span>'+
+    '</div>';
+  api('admin_empList',{}).then(function(r){ if(!r.ok)return;
+    var st={}; (r.list||[]).forEach(function(e){ if(e.site)st[e.site]=1; });
+    $('expSite').innerHTML='<option value="__all__">全工地</option>'+Object.keys(st).sort().map(function(x){return '<option>'+esc(x)+'</option>';}).join('');
+  });
+}
+function doExport(btn){
+  var kinds=Array.prototype.map.call(document.querySelectorAll('#expKinds input:checked'),function(i){return i.value;});
+  if(!kinds.length){ alert('請至少勾選一種報表'); return; }
+  var d={site:$('expSite').value,fmt:$('expFmt').value,year:$('expY').value,month:$('expM').value};
+  var names={}; EXP_KINDS.forEach(function(k){ names[k[0]]=k[1]; });
+  var okC=0, fails=[];
+  bBusy(btn,'匯出中…');
+  (function next(i){
+    if(i>=kinds.length){
+      bDone(btn); $('expStat').textContent='';
+      var msg='完成 '+okC+' / '+kinds.length+' 個報表';
+      if(fails.length){ alert('部分未完成：\n'+fails.join('\n')); toast(msg,true); } else toast(msg);
+      return;
+    }
+    $('expStat').textContent='（'+(i+1)+'/'+kinds.length+'）產生 '+names[kinds[i]]+'…';
+    api('admin_exportReport',{kind:kinds[i],site:d.site,fmt:d.fmt,year:d.year,month:d.month}).then(function(j){
+      if(j.ok){ okC++; downloadB64(j.b64,j.filename); }
+      else fails.push('・'+names[kinds[i]]+'：'+(j.msg||'失敗'));
+      next(i+1);
+    });
+  })(0);
 }
 
 /* ===================== 資料維護：年度歸檔 / 區間備份 ===================== */
