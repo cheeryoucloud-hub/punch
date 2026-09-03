@@ -299,7 +299,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-03-sitecache-01";
+  var APP_VERSION = "2026-09-03-wsafe-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -374,15 +374,18 @@
   }
   function ldOn() { LOADN++; ldEl().classList.add('on'); }
   function ldOff() { LOADN = Math.max(0, LOADN - 1); if (!LOADN) ldEl().classList.remove('on'); }
-  function post(body, tmo) {
+  function post(body, opts) {
+    if (typeof opts === 'number') opts = { tmo: opts };
+    opts = opts || {};
     ldOn();
-    return _postTry(body, 1, tmo).then(
+    return _postTry(body, 1, opts).then(
       function (o) { ldOff(); return o; },
       function (e) { ldOff(); throw e; });
   }
   var POST_TIMEOUT = 10000;                    // 行動網路常見「掛住不回」,逾時才能觸發重試
-  function _postTry(body, _try, tmo) {
-    _try = _try || 1;
+  function _postTry(body, _try, opts) {
+    _try = _try || 1; opts = opts || {};
+    var tmo = opts.tmo;
     var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var timer = null;
     var timeout = new Promise(function (_, rej) {
@@ -399,8 +402,9 @@
         throw new Error('bad-json');
       })
       .catch(function (e) {
-        if (_try < 3) return new Promise(function (res) { setTimeout(res, 600 * _try); }).then(function () { return _postTry(body, _try + 1, tmo); });
-        throw new Error('伺服器忙碌或連線不穩，請再按一次');
+        // 寫入類(打卡/申請/簽核)不能自動重試 —— 第一發可能已成功,重試會寫出第二筆
+        if (!opts.noRetry && _try < 3) return new Promise(function (res) { setTimeout(res, 600 * _try); }).then(function () { return _postTry(body, _try + 1, opts); });
+        throw new Error(opts.noRetry ? 'wtimeout' : '伺服器忙碌或連線不穩，請再按一次');
       });
   }
 
@@ -848,8 +852,14 @@
     ['btnIn','btnOut','btnOtOut'].forEach(function(id){ var b=document.getElementById(id); if(b)b.disabled=true; });
     bBusy(PBTN, '送出中…'); ovBusy('打卡送出中…請稍候');
     post({ action: 'punch', idToken: me.idToken, userId: me.userId, displayName: me.displayName, mode: isOther ? 'field' : '', site: site, siteName: siteName,
-           punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, note: note, device: navigator.platform + ' / LINE', env: ENV })
-      .then(onDone).catch(function (e) { showResult(false, '送出失敗：' + e); ready(); });
+           punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, note: note, device: navigator.platform + ' / LINE', env: ENV },
+         { tmo: 45000, noRetry: true })                       // 打卡是寫入:等久一點,但絕不自動重試
+      .then(onDone).catch(function (e) {
+        if (String(e).indexOf('wtimeout') >= 0)
+          showResult(false, '伺服器回應逾時。這筆打卡「可能已經成功」——請稍後到「概覽」確認今天的紀錄,若已有就不要再打一次。');
+        else showResult(false, '送出失敗：' + e);
+        ready();
+      });
   }
   function onDone(res) {
     ovBusyOff();
@@ -919,7 +929,7 @@
     if (!reason) { alert('請填補打原因'); return; }
     var mb = document.getElementById('mkBtn');
     bBusy(mb, '送出中…'); ovBusy('補打申請送出中…請稍候');
-    post({ action: 'makeup', idToken: me.idToken, punchType: type, makeupDate: date, makeupTime: time, reason: reason, device: navigator.platform + ' / LINE' })
+    post({ action: 'makeup', idToken: me.idToken, punchType: type, makeupDate: date, makeupTime: time, reason: reason, device: navigator.platform + ' / LINE' }, { tmo: 45000, noRetry: true })
       .then(function (res) {
         ovBusyOff();
         if (!res || !res.ok) { bDone(mb); showResult(false, (res && res.msg) || '補打失敗'); return; }
@@ -1032,7 +1042,7 @@
     var origDate = tfState.year + '/' + ('0' + tfState.month).slice(-2) + '/' + ('0' + day).slice(-2);
     var btn = document.getElementById('tfBtn');
     bBusy(btn, '送出中…'); ovBusy('調休申請送出中…請稍候');
-    post({ action: 'submitTransfer', idToken: me.idToken, origDate: origDate, newDate: newDate, newAM: newAM, newPM: newPM, reason: reason })
+    post({ action: 'submitTransfer', idToken: me.idToken, origDate: origDate, newDate: newDate, newAM: newAM, newPM: newPM, reason: reason }, { tmo: 45000, noRetry: true })
       .then(function (res) {
         ovBusyOff();
         if (!res || !res.ok) { bDone(btn); showResult(false, (res && res.msg) || '送出失敗'); return; }
@@ -1495,7 +1505,7 @@
       if (!items.length) return;
       if (!confirm('確定一次核准這 ' + items.length + ' 件申請?')) return;
       bBusy(goBtn, '核准中…'); ovBusy('批次核准中…（' + items.length + ' 件）');
-      post({ action: 'approveBatch', idToken: me.idToken, items: items }).then(function (res) {
+      post({ action: 'approveBatch', idToken: me.idToken, items: items }, { tmo: 90000, noRetry: true }).then(function (res) {
         ovBusyOff();
         if (!res || !res.ok) { bDone(goBtn); ovToast('批次核准失敗：' + ((res && res.msg) || ''), true); return; }
         var msg = '已核准 ' + res.okCount + ' / ' + res.total + ' 件';
@@ -1542,7 +1552,7 @@
   function ovDelTf(id, btn) {
     if (!confirm('確定刪除這張調休申請?\n（尚未有人簽核才能刪,刪掉後要重新送單）')) return;
     bBusy(btn, '刪除中…'); ovBusy('刪除中…請稍候');
-    post({ action: 'deleteTransfer', idToken: me.idToken, id: id }).then(function (res) {
+    post({ action: 'deleteTransfer', idToken: me.idToken, id: id }, { tmo: 45000, noRetry: true }).then(function (res) {
       ovBusyOff();
       if (!res || !res.ok) { bDone(btn); ovToast((res && res.msg) || '刪除失敗', true); return; }
       ovToast('已刪除'); startOverview();
@@ -1598,7 +1608,7 @@
     var body = (kind === 'transfer')
       ? { action: 'actTransfer', idToken: me.idToken, id: id, decision: decision, stage: stage || '' }
       : { action: 'approve', idToken: me.idToken, recordId: id, decision: decision };
-    post(body).then(function (res) {
+    post(body, { tmo: 45000, noRetry: true }).then(function (res) {
       if (!res || !res.ok) {
         ovBusyOff();
         ovToast('操作失敗：' + ((res && res.msg) || ''), true);
