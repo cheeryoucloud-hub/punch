@@ -2015,7 +2015,7 @@ function openReportLeave(tr){
 }
 function reportHtml(j,ed){
   function cell(day,field,val,cls){ var c='ec'+(cls?' '+cls:'');
-    if(ed) return '<td class="'+c+'" contenteditable="true" data-day="'+day+'" data-f="'+field+'" oninput="rptEdit(this)">'+esc(val||'')+'</td>';
+    if(ed) return '<td class="'+c+'" contenteditable="true" data-day="'+day+'" data-f="'+field+'" oninput="rptEdit(this)" onkeydown="rptKey(event,this)" onpaste="rptPaste(event,this)">'+esc(val||'')+'</td>';
     return '<td class="'+(cls||'')+'">'+esc(val||'')+'</td>'; }
   var h='<div class="report'+(ed?' editing':'')+'">'+
     '<div class="rpt-co">'+esc(j.company)+'</div>'+
@@ -2075,10 +2075,19 @@ function exportReportExcel(){
   });
 }
 function rptEdit(td){ var d=td.getAttribute('data-day'), f=td.getAttribute('data-f'); if(!RPTCHG[d])RPTCHG[d]={day:Number(d)}; RPTCHG[d][f]=td.textContent.trim(); }
+/* 編輯格：Enter 不換行(改成結束編輯)、貼上只留純文字 —— 避免格內多出 <div>/<br> 或帶樣式的 HTML 把 A4 版面撐壞 */
+function rptKey(e,td){ if(e.key==='Enter'){ e.preventDefault(); td.blur(); } }
+function rptPaste(e,td){
+  e.preventDefault();
+  var t=((e.clipboardData||window.clipboardData).getData('text')||'').replace(/\s+/g,' ').trim();
+  if(!document.execCommand||!document.execCommand('insertText',false,t)){ td.textContent=t; rptEdit(td); }
+}
 function saveReport(){
   var emp=$('rpEmp').value; if(!emp){ alert('請先選員工'); return; }
   var rows=Object.keys(RPTCHG).map(function(k){return RPTCHG[k];}); if(!rows.length){ alert('沒有變更'); return; }
-  rows.forEach(function(rw){ if(rw.leave)return; ['in','out','ot','status','note'].forEach(function(f){ if(rw[f]===undefined){ var td=document.querySelector('.att td[data-day="'+rw.day+'"][data-f="'+f+'"]'); if(td)rw[f]=td.textContent.trim(); } }); });
+  // 沒改到的欄位帶目前畫面值一起存(整列覆蓋);但「：」「-」只是佔位,不當成人資修正值存進去,
+  // 否則之後登錄的休假會被這些佔位值蓋掉（人資自己打的「：」「-」仍照存）
+  rows.forEach(function(rw){ if(rw.leave)return; ['in','out','ot','status','note'].forEach(function(f){ if(rw[f]===undefined){ var td=document.querySelector('.att td[data-day="'+rw.day+'"][data-f="'+f+'"]'); if(td){ var v=td.textContent.trim(); if(v!=='：'&&v!=='-')rw[f]=v; } } }); });
   modal('儲存出勤表修正',
     '<div class="field"><label>修改原因（必填）</label><input id="rpReason" placeholder="例：漏打卡經主管確認補登、系統異常更正"></div>'+
     '<div class="hint">出勤紀錄依法須據實記載。系統會一併記錄<b>操作人、修改前原值、修改時間</b>以備查。</div>',
