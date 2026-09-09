@@ -1981,7 +1981,7 @@ function loadReport(){
 function renderReport(j){
   if(!j)return;
   var ed=j.editable&&RPT_EDIT; rptTools(j.editable);
-  $('rpBody').innerHTML='<div class="a4">'+reportHtml(j,ed)+'</div>'+(ed?'<div class="hint noprint" style="margin-top:8px">＊編輯中：點表格內時間／狀態／備註直接修改；<b>在整列上按右鍵可設定假別</b>（例假／特休／婚假…）,改完按「儲存修正」。</div>':'');
+  $('rpBody').innerHTML='<div class="a4">'+reportHtml(j,ed)+'</div>'+(ed?'<div class="hint noprint" style="margin-top:8px">＊編輯中：點表格內時間／狀態／備註直接修改（整格清空＝該格留白）；<b>在整列上按右鍵可設定假別</b>（例假／特休／婚假…）,改完按「儲存修正」。</div>':'');
   if(ed) bindReportContext();
 }
 var RPT_LV_OPTS=['例假','特休','事假','病假','婚假','喪假','公假','國定'];
@@ -2004,7 +2004,7 @@ function openReportLeave(tr){
       var v=$('rlv').value; closeModal(); if(v==='')return;
       if(!RPTCHG[day])RPTCHG[day]={day:day};
       RPTCHG[day].leave=v;
-      if(v!=='無'){ RPTCHG[day].in=''; RPTCHG[day].out=''; RPTCHG[day].ot=''; }
+      if(v!=='無'){ delete RPTCHG[day].in; delete RPTCHG[day].out; delete RPTCHG[day].ot; }   // 假別整天顯示,時間由後端留白,不另存修正值
       // 立即反映在畫面上
       if(v==='無'){ tr.classList.remove('lvrow'); }
       else { tr.classList.add('lvrow'); }
@@ -2082,12 +2082,29 @@ function rptPaste(e,td){
   var t=((e.clipboardData||window.clipboardData).getData('text')||'').replace(/\s+/g,' ').trim();
   if(!document.execCommand||!document.execCommand('insertText',false,t)){ td.textContent=t; rptEdit(td); }
 }
+var RPT_CLEAR='（清除）';   // 與後端 REPORT_CLEAR 相同：人資把格子清空的記號（後端空字串＝沒修正,會回到打卡計算值）
+/* 備註只剩「①」「②」這種記號沒內容的段落拿掉；全拿掉就等於清空 */
+function rptCleanNote(v){ return String(v||'').split('｜').map(function(s){return s.trim();}).filter(function(s){ return s&&!/^[①②③]$/.test(s); }).join('｜'); }
 function saveReport(){
   var emp=$('rpEmp').value; if(!emp){ alert('請先選員工'); return; }
   var rows=Object.keys(RPTCHG).map(function(k){return RPTCHG[k];}); if(!rows.length){ alert('沒有變更'); return; }
-  // 沒改到的欄位帶目前畫面值一起存(整列覆蓋);但「：」「-」只是佔位,不當成人資修正值存進去,
-  // 否則之後登錄的休假會被這些佔位值蓋掉（人資自己打的「：」「-」仍照存）
-  rows.forEach(function(rw){ if(rw.leave)return; ['in','out','ot','status','note'].forEach(function(f){ if(rw[f]===undefined){ var td=document.querySelector('.att td[data-day="'+rw.day+'"][data-f="'+f+'"]'); if(td){ var v=td.textContent.trim(); if(v!=='：'&&v!=='-')rw[f]=v; } } }); });
+  rows.forEach(function(rw){
+    ['in','out','ot','status','note'].forEach(function(f){
+      if(rw[f]===undefined){
+        // 沒改到的欄位帶目前畫面值一起存(整列覆蓋);設了假別的列不用帶。
+        // 時間欄的「：」「-」只是佔位,不當成修正值存,否則之後登錄的休假會被佔位值蓋掉
+        if(rw.leave)return;
+        var td=document.querySelector('.att td[data-day="'+rw.day+'"][data-f="'+f+'"]'); if(!td)return;
+        var v=td.textContent.trim();
+        if((f==='in'||f==='out')&&v==='：')return; if(f==='ot'&&v==='-')return;
+        rw[f]=v;
+      } else {
+        // 人資有動到的欄位：清空就存「（清除）」記號,產表時該格留白；備註只剩 ①②③ 記號也視同清空
+        var v2=String(rw[f]); if(f==='note')v2=rptCleanNote(v2);
+        rw[f]=(v2==='')?RPT_CLEAR:v2;
+      }
+    });
+  });
   modal('儲存出勤表修正',
     '<div class="field"><label>修改原因（必填）</label><input id="rpReason" placeholder="例：漏打卡經主管確認補登、系統異常更正"></div>'+
     '<div class="hint">出勤紀錄依法須據實記載。系統會一併記錄<b>操作人、修改前原值、修改時間</b>以備查。</div>',
