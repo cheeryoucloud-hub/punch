@@ -597,7 +597,7 @@ function doLogin(){
       enterApp();
     }).catch(function(){ $('lgBtn').textContent='登入'; $('lgBtn').disabled=false; $('lgErr').textContent='連線失敗,請確認部署網址'; });
 }
-function doLogout(){ TOKEN=''; try{sessionStorage.removeItem('qy_tok');sessionStorage.removeItem('qy_me');}catch(e){}
+function doLogout(){ TOKEN=''; try{sessionStorage.removeItem('qy_tok');sessionStorage.removeItem('qy_me');sessionStorage.removeItem('qy_screen');}catch(e){}
   $('app').classList.add('hidden'); $('login').classList.remove('hidden'); $('lgPass').value=''; }
 /* 員工/工地名單快取：各頁的篩選下拉共用。
    名單一天內幾乎不變,卻每次進頁都重打一趟 GAS(1~3 秒) —— 改成:
@@ -629,11 +629,15 @@ function empCacheClear(){
 function enterApp(){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
   $('waName').textContent=ME.name; $('waRole').textContent=ME.role;
-  state.ym=ymNow(); state.ovDate=''; state.screen='overview';
+  state.ym=ymNow(); state.ovDate='';
+  // 重新整理後停在上次的分頁（記在 sessionStorage,同一個分頁視窗有效）;沒有權限的分頁回到總覽
+  var last=''; try{ last=sessionStorage.getItem('qy_screen')||''; }catch(e){}
+  state.screen=(last&&allowScreens().indexOf(last)>=0)?last:'overview';
   renderNav(); render();
   getEmps(false,function(){}); getEmps(true,function(){});   // 預抓名單,篩選下拉秒開
 }
 function renderNav(){
+  try{ sessionStorage.setItem('qy_screen',state.screen); }catch(e){}   // 記住目前分頁,重新整理後回到這裡
   var allow=allowScreens(), groups={}, order=[];
   NAV.forEach(function(n){ if(allow.indexOf(n.k)<0)return; if(!groups[n.g]){groups[n.g]=[];order.push(n.g);} groups[n.g].push(n); });
   var h='';
