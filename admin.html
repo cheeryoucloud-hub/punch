@@ -342,6 +342,14 @@
   .lnbub .tx{ font-size:12.5px; color:#444; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
   .lnbub .ft{ padding:0 15px 14px; }
   .lnbub .bt{ display:block; text-align:center; color:#fff; font-weight:700; font-size:13.5px; padding:10px 0; border-radius:7px; }
+  /* 每日總結卡預覽：區塊／標題列＋數量膠囊／工地→人員列 */
+  .lnbub .sms{ padding:2px 0 10px; } .lnbub .sms+.sms{ border-top:1px solid #eee; padding-top:10px; }
+  .lnbub .smt{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; } .lnbub .smt b{ font-size:13px; color:#222; }
+  .lnbub .smn{ font-size:11px; font-weight:800; padding:1px 8px; border-radius:10px; color:#fff; white-space:nowrap; }
+  .lnbub .smh{ font-size:11px; color:#888; margin:2px 0 7px; }
+  .lnbub .sml{ display:flex; gap:8px; align-items:baseline; margin-bottom:5px; } .lnbub .sml .s{ flex:0 0 46px; font-size:12px; font-weight:800; }
+  .lnbub .sml .v{ flex:1; font-size:12.5px; color:#333; line-height:1.5; word-break:break-all; } .lnbub .sml .v small{ display:block; font-size:10.5px; color:#999; line-height:1.3; }
+  .lnbub .sml .t{ flex:0 0 auto; font-size:11px; font-weight:700; padding:1px 7px; border-radius:6px; background:#EFEAFB; color:#5b3fb8; } .lnbub .sml .t.w{ background:#FDECEC; color:#b42318; }
   .colorbar{ display:flex; gap:8px; flex-wrap:wrap; }
   .colorbar .cdot{ width:30px; height:30px; border-radius:8px; cursor:pointer; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:800; }
   .colorbar .cdot.on{ border-color:var(--ink); box-shadow:0 0 0 2px var(--surface) inset; }
@@ -1090,6 +1098,7 @@ var RMD=null;
 /** 依「發送對象」決定卡片標題/顏色/按鈕（與後端 _remindFlex 一致）*/
 var RMD_COLORS=[['#0E7C66','綠'],['#E29A2E','橘'],['#2f6bd8','藍'],['#DC2626','紅'],['#7C5CD6','紫'],['#37424E','深灰']];
 function rmdPreset(target){
+  if(target==='summary_boss'||target==='summary_admin') return {icon:'📋',title:'今日出勤總結',color:'#2f6bd8',btn:'查看出勤概覽',list:true,summary:true};
   if(target==='boss_no_in')  return {icon:'📋',title:'今日未打上班卡名單',color:'#2f6bd8',btn:'查看出勤概覽',list:true};
   if(target==='boss_no_out') return {icon:'📋',title:'今日未打下班卡名單',color:'#E29A2E',btn:'查看出勤概覽',list:true};
   if(target==='admin_no_in') return {icon:'📋',title:'全公司未打上班卡名單',color:'#2f6bd8',btn:'查看出勤概覽',list:true};
@@ -1105,9 +1114,33 @@ function rmdStyle(target){
   return { title:isOut?'⏰ 下班打卡提醒':'⏰ 上班打卡提醒', color:isOut?'#E29A2E':'#0E7C66',
            btn:isOut?'前往打下班卡':'前往打上班卡' };
 }
+/* 每日總結卡預覽（對應後端 _summaryFlex；名單為範例。空區塊整區隱藏、三區都空不發）*/
+function rmdSummaryHtml(target,text,time,ic,tt,col,showBtn){
+  var isAdm=(target==='summary_admin');
+  function sec(title,hint,color,n,unit,rows){
+    return '<div class="sms"><div class="smt"><b>'+title+'</b><span class="smn" style="background:'+color+'">'+n+' '+unit+'</span></div><div class="smh">'+hint+'</div>'+
+      rows.map(function(r){ return '<div class="sml"><span class="s" style="color:'+color+'">'+esc(r[0])+'</span><span class="v">'+esc(r[1])+(r[2]?'<small>'+esc(r[2])+'</small>':'')+'</span>'+(r[3]?'<span class="t'+(r[4]?' w':'')+'">'+esc(r[3])+'</span>':'')+'</div>'; }).join('')+'</div>';
+  }
+  var body=sec('今日未打上班卡人員','請提醒他們補打卡。','#2f6bd8',3,'人',[['寶田','謝舒婷、李聰柔'],['先麥','黃茂軒']])+
+    sec('今日未打下班卡人員','請提醒他們完成下班打卡。','#E29A2E',3,'人',[['寶田','王小明'],['義成','賴聿哲、蘇博建']])+
+    sec(isAdm?'今日尚有未核准之申請':'今日您尚有未核准之申請','請至出勤概覽進行簽核。','#7C5CD6',4,'件',
+      isAdm?[['寶田','謝舒婷','','補打卡'],['寶田','李聰柔','主管已簽，缺負責人','調休'],['先麥','黃茂軒','負責人已簽，缺主管','調休'],['義成','賴聿哲','','定位異常',true]]
+           :[['寶田','謝舒婷','','補打卡'],['寶田','李聰柔','主管已簽，待您簽核','調休'],['先麥','黃茂軒','','外勤打卡'],['義成','賴聿哲','','定位異常',true]]);
+  var t=(text||'').trim();
+  if(t) body+='<div class="sp2" style="margin:9px 0"></div><div class="tx" style="font-size:11px;color:#888">'+esc(t)+'</div>';
+  var d=new Date(), wk=['日','一','二','三','四','五','六'], hm=(String(time||'').match(/(\d{1,2}:\d{2})/)||[])[1]||'';
+  var sub=p2(d.getMonth()+1)+'/'+p2(d.getDate())+'（'+wk[d.getDay()]+'）'+hm+(isAdm?' · 全公司':'');
+  var head='<div style="background:'+col+';color:#fff;padding:13px 15px 11px"><div style="font-weight:800;font-size:16px">'+esc((ic?ic+' ':'')+tt)+'</div><div style="font-size:11px;opacity:.85;margin-top:3px">'+esc(sub)+'</div></div>';
+  var foot=(showBtn===false)?'':'<div class="ft"><span class="bt" style="background:'+col+'">查看出勤概覽</span></div>';
+  return '<div class="lnprev">'+
+    (time?('<div class="cap">'+esc(time)+' · '+(isAdm?'寄給人資／管理員（全公司一張）':'寄給工地負責人／主管（一人一張,含其所有工地）')+'</div>'):'')+
+    '<div class="lnbub">'+head+'<div class="bd" style="padding-bottom:6px">'+body+'</div>'+foot+'</div>'+
+    '<div class="cap" style="margin:8px 0 0 4px">＊名單為範例,實際依當天狀況產生;空區塊整區隱藏,三區都空就不發'+(isAdm?'<br>＊人資看到所有未完成的申請,調休標示缺哪一方簽':'<br>＊調休只列「輪到收件人簽」的')+'</div></div>';
+}
 function rmdCardHtml(target,text,time,targetLabel,icon,title,color,showBtn){
   var p=rmdPreset(target);
   var ic=(icon||'').trim()||p.icon, tt=(title||'').trim()||p.title, col=(color||'').trim()||p.color;
+  if(p.summary) return rmdSummaryHtml(target,text,time,ic,tt,col,showBtn);
   var head='<div style="background:'+col+';color:#fff;font-weight:800;font-size:16px;padding:13px 15px">'+esc((ic?ic+' ':'')+tt)+'</div>';
   var foot=(showBtn===false)?'':'<div class="ft"><span class="bt" style="background:'+col+'">'+esc(p.btn)+'</span></div>';
   if(p.list){
@@ -1198,7 +1231,7 @@ function loadRemind(){
     var h='<table class="tbl"><thead><tr><th style="width:118px">時間</th><th>提醒事項</th><th style="width:170px">發送對象</th><th style="width:80px">啟用</th><th style="width:96px">卡片</th>'+(j.canEdit?'<th class="r" style="width:120px">操作</th>':'')+'</tr></thead><tbody>';
     j.list.forEach(function(r,i){
       h+='<tr><td><b style="font-size:15px">'+esc(r.time)+'</b><div class="hint">'+(r.date?('📅 '+esc(r.date.substring(5))):'每日')+'</div></td>'+
-        '<td class="muted" style="line-height:1.6">'+esc(r.text)+'</td>'+
+        '<td class="muted" style="line-height:1.6">'+(esc(r.text)||'<span class="hint">（每日總結卡,內容依當天狀況自動產生）</span>')+'</td>'+
         '<td>'+esc((j.targets||{})[r.target]||r.target)+((r.pick&&r.pick.length)?('<div class="hint">已選 '+r.pick.length+' 個</div>'):'')+'</td>'+
         '<td>'+(r.on?'<span class="pill ok">啟用</span>':'<span class="pill mut">停用</span>')+'</td>'+
         '<td><button class="btn sm" style="white-space:nowrap" onclick="prevRemind('+i+')">👁 預覽</button></td>'+
@@ -1382,11 +1415,11 @@ function editRemind(i){
       '<div class="hint" style="margin-top:4px">填了日期就只在那一天發送一次;留空則每天到點發送。</div></div>'+
     '<div class="field"><label>發送對象</label><select id="rTarget">'+opts+'</select></div>'+
     '<div class="field" id="rPickWrap" style="display:none"></div>'+
-    '<div class="row2"><div class="field"><label>圖示（留空用預設）</label><input id="rIcon" maxlength="4" placeholder="⏰" value="'+esc(r.icon||'')+'" oninput="rmdLivePrev()"></div>'+
+    '<div class="row2"><div class="field"><label>圖示（留空用預設）</label><input id="rIcon" maxlength="4" placeholder="'+esc(rmdPreset(r.target).icon)+'" value="'+esc(r.icon||'')+'" oninput="rmdLivePrev()"></div>'+
     '<div class="field" style="flex:2"><label>標題（留空用預設）</label><input id="rTitle" placeholder="'+esc(rmdPreset(r.target).title)+'" value="'+esc(r.title||'')+'" oninput="rmdLivePrev()"></div></div>'+
     '<div class="field"><label>標題底色</label><div id="rColors" class="colorbar"></div></div>'+
     '<div class="field"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="rBtn"'+((r.btn===false)?'':' checked')+' onchange="rmdLivePrev()" style="width:16px;height:16px;accent-color:var(--brand)"> 顯示「進入系統」按鈕</label></div>'+
-    '<div class="field"><label>提醒事項（LINE 卡片內容）</label><textarea id="rText" rows="6" oninput="rmdLivePrev()" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13.5px;background:var(--surface-2);color:var(--ink)">'+esc(r.text||'')+'</textarea></div>'+
+    '<div class="field"><label id="rTextLab">'+(rmdPreset(r.target).summary?'補充說明（選填,顯示在卡片最下方）':'提醒事項（LINE 卡片內容）')+'</label><textarea id="rText" rows="6" oninput="rmdLivePrev()" placeholder="'+(rmdPreset(r.target).summary?'例：忘記打卡請用「補打卡」提出申請':'')+'" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13.5px;background:var(--surface-2);color:var(--ink)">'+esc(r.text||'')+'</textarea></div>'+
     '<div class="field"><label>卡片預覽（員工在 LINE 收到的樣子）</label><div id="rPrev"></div></div>',
     function(){
       busyOn('儲存中…');
@@ -1395,6 +1428,10 @@ function editRemind(i){
     });
   if($('rTarget')) $('rTarget').onchange=function(){ state.rmdCurPick=rmdPicked(); rmdSyncPick();
     if($('rTitle')) $('rTitle').placeholder=rmdPreset(this.value).title;
+    if($('rIcon')) $('rIcon').placeholder=rmdPreset(this.value).icon;
+    var isSum=!!rmdPreset(this.value).summary;                      // 每日總結：內容自動產生,文字框改成選填的補充說明
+    if($('rTextLab')) $('rTextLab').textContent=isSum?'補充說明（選填,顯示在卡片最下方）':'提醒事項（LINE 卡片內容）';
+    if($('rText')) $('rText').placeholder=isSum?'例：忘記打卡請用「補打卡」提出申請':'';
     rmdColorBar(RMD_CUR_COLOR,this.value); rmdLivePrev(); };
   rmdSyncPick();
   RMD_CUR_COLOR=r.color||'';
