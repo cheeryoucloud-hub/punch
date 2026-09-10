@@ -1102,7 +1102,7 @@ var RMD=null;
 /** 依「發送對象」決定卡片標題/顏色/按鈕（與後端 _remindFlex 一致）*/
 var RMD_COLORS=[['#0E7C66','綠'],['#E29A2E','橘'],['#2f6bd8','藍'],['#DC2626','紅'],['#7C5CD6','紫'],['#37424E','深灰']];
 function rmdPreset(target){
-  if(target==='summary_boss'||target==='summary_admin') return {icon:'📋',title:'今日出勤總結',color:'#2f6bd8',btn:'查看出勤概覽',list:true,summary:true};
+  if(String(target||'').indexOf('summary_')===0) return {icon:'📋',title:'今日出勤總結',color:'#2f6bd8',btn:'查看出勤概覽',list:true,summary:true};
   if(target==='boss_no_in')  return {icon:'📋',title:'今日未打上班卡名單',color:'#2f6bd8',btn:'查看出勤概覽',list:true};
   if(target==='boss_no_out') return {icon:'📋',title:'今日未打下班卡名單',color:'#E29A2E',btn:'查看出勤概覽',list:true};
   if(target==='admin_no_in') return {icon:'📋',title:'全公司未打上班卡名單',color:'#2f6bd8',btn:'查看出勤概覽',list:true};
@@ -1120,7 +1120,8 @@ function rmdStyle(target){
 }
 /* 每日總結卡預覽（對應後端 _summaryFlex；名單為範例。空區塊整區隱藏、三區都空不發）*/
 function rmdSummaryHtml(target,text,time,ic,tt,col,showBtn){
-  var isAdm=(target==='summary_admin');
+  var isAdm=(target!=='summary_boss');                              // 管理員／人資版：全公司一張
+  var who={summary_admin:'管理員',summary_hr:'人資',summary_admin_hr:'管理員＋人資'}[target]||'人資／管理員';
   function sec(title,hint,color,n,unit,rows){
     return '<div class="sms"><div class="smt"><b>'+title+'</b><span class="smn" style="background:'+color+'">'+n+' '+unit+'</span></div><div class="smh">'+hint+'</div>'+
       rows.map(function(r){ return '<div class="sml"><span class="s" style="color:'+color+'">'+esc(r[0])+'</span><span class="v">'+esc(r[1])+(r[2]?'<small>'+esc(r[2])+'</small>':'')+'</span>'+(r[3]?'<span class="t'+(r[4]?' w':'')+'">'+esc(r[3])+'</span>':'')+'</div>'; }).join('')+'</div>';
@@ -1137,7 +1138,7 @@ function rmdSummaryHtml(target,text,time,ic,tt,col,showBtn){
   var head='<div style="background:'+col+';color:#fff;padding:13px 15px 11px"><div style="font-weight:800;font-size:16px">'+esc((ic?ic+' ':'')+tt)+'</div><div style="font-size:11px;opacity:.85;margin-top:3px">'+esc(sub)+'</div></div>';
   var foot=(showBtn===false)?'':'<div class="ft"><span class="bt" style="background:'+col+'">查看出勤概覽</span></div>';
   return '<div class="lnprev">'+
-    (time?('<div class="cap">'+esc(time)+' · '+(isAdm?'寄給人資／管理員（全公司一張）':'寄給工地負責人／主管（一人一張,含其所有工地）')+'</div>'):'')+
+    (time?('<div class="cap">'+esc(time)+' · '+(isAdm?('寄給'+who+'（全公司一張）'):'寄給工地負責人／主管（一人一張,含其所有工地）')+'</div>'):'')+
     '<div class="lnbub">'+head+'<div class="bd" style="padding-bottom:6px">'+body+'</div>'+foot+'</div>'+
     '<div class="cap" style="margin:8px 0 0 4px">＊名單為範例,實際依當天狀況產生;空區塊整區隱藏,三區都空就不發'+(isAdm?'<br>＊人資看到所有未完成的申請,調休標示缺哪一方簽':'<br>＊調休只列「輪到收件人簽」的')+'</div></div>';
 }
