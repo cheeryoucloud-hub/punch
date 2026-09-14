@@ -913,7 +913,7 @@ function addPunchRow(){
         api('admin_addPunchRow',{empId:emp,dt:dt.replace(/-/g,'/')+' '+tm,type:$('kType').value,basis:basis,note:$('kNote').value}).then(function(j){
           busyOff();
           if(!j.ok){ toast(j.msg||'補登失敗',true); return; }
-          closeModal(); toast('已補登');
+          closeModal(); toast(j.alsoOut?'已補登，並自動補登同時間的下班':'已補登');
           PLOG.date=dt.replace(/-/g,'/'); plSetDate(dt);      // 跳到該天,馬上看得到這筆
         });
       });
@@ -930,12 +930,13 @@ function editPunchRow(i){
   var r=PLOG_LIST[i]; if(!r)return;
   modal('修改打卡紀錄 · '+r.name,
     '<div class="row2"><div class="field"><label>打卡時間（yyyy/MM/dd HH:mm）</label><input id="eDt" value="'+esc(r.dt)+'"></div>'+
-    '<div class="field"><label>類型</label><select id="eType">'+selOpts(['上班','下班','加班開始','加班結束'],r.type)+'</select></div></div>'+
+    '<div class="field"><label>類型</label><select id="eType" onchange="ePunchTypeHint(\''+esc(r.type)+'\')">'+selOpts(['上班','下班','加班開始','加班結束'],r.type)+'</select></div></div>'+
+    '<div class="hint" id="eOtHint" style="display:none;margin:-4px 0 10px;padding:8px 10px;border-radius:9px;background:var(--brand-soft);color:var(--brand-ink)">改成「加班結束」後，若當天沒有其他下班卡，系統會<b>自動補一筆同時間的下班</b>（備註標記「加班結束一併登記下班」）。出勤表會同時顯示下班與加班時間，備註請填加班原因。</div>'+
     '<div class="row2"><div class="field"><label>方式</label><select id="eMethod">'+selOpts(['定點','外勤','補打'],r.method)+'</select></div>'+
     '<div class="field"><label>定位結果</label><select id="eGeo">'+selOpts(['正常','超出範圍','無定位','外勤','補打'],r.geo)+'</select></div></div>'+
     '<div class="row2"><div class="field"><label>打卡地點</label><input id="ePlace" value="'+esc(r.place)+'"></div>'+
     '<div class="field"><label>狀態</label><select id="eStatus">'+selOpts(['正常','待核准','已核准','已退回'],r.status)+'</select></div></div>'+
-    '<div class="field"><label>備註</label><input id="eNote" value="'+esc(r.note)+'"></div>'+
+    '<div class="field"><label id="eNoteLab">備註</label><input id="eNote" value="'+esc(r.note)+'"></div>'+
     '<div class="field"><label>修改原因（必填）</label><input id="eReason" placeholder="例：員工反映時間有誤，經主管確認後更正"></div>'+
     '<div class="hint">出勤紀錄依法須據實記載。系統會記錄<b>修改人、修改時間、修改前原值</b>以備查。</div>',
     function(){
@@ -945,9 +946,16 @@ function editPunchRow(i){
       api('admin_savePunchRow',{id:r.id,dt:$('eDt').value.trim(),type:$('eType').value,method:$('eMethod').value,
         geo:$('eGeo').value,place:$('ePlace').value,status:$('eStatus').value,note:$('eNote').value,reason:reason}).then(function(j){
         busyOff(); if(!j.ok){ toast(j.msg||'儲存失敗',true); return; }
-        closeModal(); toast('已更新'); loadPunchLog();
+        closeModal(); toast(j.alsoOut?'已更新，並自動補登同時間的下班':'已更新'); loadPunchLog();
       });
     });
+  ePunchTypeHint(r.type);
+}
+/* 類型改成「加班結束」：顯示自動補下班的說明,備註欄改標「加班原因」 */
+function ePunchTypeHint(orig){
+  var t=$('eType')?$('eType').value:'', isOt=(t==='加班結束');
+  if($('eOtHint')) $('eOtHint').style.display=(isOt&&orig!=='加班結束')?'block':'none';
+  if($('eNoteLab')) $('eNoteLab').textContent=isOt?'備註（加班原因，會顯示在出勤表 ③）':'備註';
 }
 function delPunchRow(i){
   var r=PLOG_LIST[i]; if(!r)return;
