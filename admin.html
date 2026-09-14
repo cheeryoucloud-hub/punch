@@ -710,7 +710,7 @@ function loadOverview(){
           if(!la&&!lp){ la=pp.leave; lp=pp.leave; }
           h+='<tr><td>'+esc(pp.name)+'</td><td class="lv">'+esc(la||'—')+'</td><td class="lv">'+esc(lp||'—')+'</td></tr>'; return; }
           var ci=pp.in?(esc(pp.in)+(pp.inPending?'<span class="pill wait" style="font-size:9.5px;margin-left:3px">待核准</span>':'')):'—';
-          var co=pp.out?(esc(pp.out)+(pp.outPending?'<span class="pill wait" style="font-size:9.5px;margin-left:3px">待核准</span>':'')):'—';
+          var co=pp.out?((pp.outNext?'<b title="隔天凌晨打的卡（跨日）">'+esc(pp.out)+'</b>':esc(pp.out))+(pp.outPending?'<span class="pill wait" style="font-size:9.5px;margin-left:3px">待核准</span>':'')):'—';
           h+='<tr><td>'+esc(pp.name)+'</td><td class="tnum">'+ci+'</td><td class="tnum">'+co+'</td></tr>'; });
         h+='</table></div>';
       });
@@ -2057,9 +2057,10 @@ function openReportLeave(tr){
     });
 }
 function reportHtml(j,ed){
-  function cell(day,field,val,cls){ var c='ec'+(cls?' '+cls:'');
-    if(ed) return '<td class="'+c+'" contenteditable="true" data-day="'+day+'" data-f="'+field+'" oninput="rptEdit(this)" onkeydown="rptKey(event,this)" onpaste="rptPaste(event,this)">'+esc(val||'')+'</td>';
-    return '<td class="'+(cls||'')+'">'+esc(val||'')+'</td>'; }
+  function cell(day,field,val,cls,next){ var c='ec'+(cls?' '+cls:'');
+    var v=next?('<b title="隔天凌晨打的卡（跨日）">'+esc(val||'')+'</b>'):esc(val||'');   // 跨日的下班／加班結束 → 粗體
+    if(ed) return '<td class="'+c+'" contenteditable="true" data-day="'+day+'" data-f="'+field+'" oninput="rptEdit(this)" onkeydown="rptKey(event,this)" onpaste="rptPaste(event,this)">'+v+'</td>';
+    return '<td class="'+(cls||'')+'">'+v+'</td>'; }
   var h='<div class="report'+(ed?' editing':'')+'">'+
     '<div class="rpt-co">'+esc(j.company)+'</div>'+
     '<div class="rpt-ti"><u>'+j.rocYear+'</u> 年 <u>'+p2(j.month)+'</u> 月份　出勤紀錄表</div>'+
@@ -2072,7 +2073,7 @@ function reportHtml(j,ed){
     if(r.leave){
       h+='<tr class="lvrow"'+trAttr+'>'+dcell+'<td class="lv">'+esc(r.leave)+'</td><td class="lv">'+esc(r.leave)+'</td><td class="lv">'+esc(r.leave)+'</td>'+cell(r.day,'status',r.status,'st')+cell(r.day,'note',r.note,'nt')+'</tr>';
     } else {
-      h+='<tr'+trAttr+'>'+dcell+cell(r.day,'in',r.in)+cell(r.day,'out',r.out)+cell(r.day,'ot',r.ot)+cell(r.day,'status',r.status,'st')+cell(r.day,'note',r.note,'nt')+'</tr>';
+      h+='<tr'+trAttr+'>'+dcell+cell(r.day,'in',r.in)+cell(r.day,'out',r.out,'',r.outNext)+cell(r.day,'ot',r.ot,'',r.otNext)+cell(r.day,'status',r.status,'st')+cell(r.day,'note',r.note,'nt')+'</tr>';
     }
   });
   h+='</tbody></table></div>'+

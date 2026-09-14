@@ -492,15 +492,16 @@ table.rpt td.d{ white-space:nowrap; }
     if (!LAST) { inT = '：'; }
     var sp = [], nt = [], hasOT = (otT !== '-');
     if (inT !== '：' && inT < '07:30') { sp.push('異常早到'); nt.push('① ' + (inN || '無')); }
+    var outNext = (outT !== '：' && outT < '06:00'), otNext = (otT !== '-' && otT < '06:00');   // 隔天凌晨打的 → 當 24:xx,粗體
     if (!hasOT && inT !== '：' && outT !== '：') {
-      var diff = hm2m(outT) - hm2m(dueOut(inT));
+      var diff = hm2m(outT) + (outNext ? 1440 : 0) - hm2m(dueOut(inT));
       if (diff < -TOL) { sp.push('早退'); nt.push('② ' + (outN || '無')); }
       else if (diff > TOL) { sp.push('異常晚退'); nt.push('② ' + (outN || '無')); }
     }
     if (hasOT) { sp.push('加班申請'); nt.push('③ ' + (otN || '無')); }
     if (!sp.length && inT !== '：' && outT !== '：') sp.push('正常');
     var c = tr.children;
-    c[1].textContent = inT; c[2].textContent = outT; c[3].textContent = otT;
+    c[1].textContent = inT; c[2].innerHTML = outNext ? '<b>' + outT + '</b>' : outT; c[3].innerHTML = otNext ? '<b>' + otT + '</b>' : otT;
     c[4].textContent = sp.join('/'); c[5].textContent = nt.join('｜');
   }
   function showRec() {

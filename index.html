@@ -134,6 +134,8 @@
   .myleave small{ display:block; font-size:12px; font-weight:800; color:#0F8A63; letter-spacing:1px; margin-bottom:5px; }
   .tag{ font-size:11px; font-weight:800; padding:3px 10px; border-radius:20px; }
   .tag.ok{ background:var(--teal-soft); color:var(--teal-d); } .tag.wait{ background:#FAEFD9; color:#8A5A0E; } .tag.bad{ background:#FBE6E3; color:#A5382A; }
+  .tag.nx{ background:#EAF0FB; color:#2F6BD8; padding:2px 7px; margin-left:4px; font-size:10.5px; }   /* 跨日：隔天凌晨打的下班 */
+  .myday .cell span.tag.nx{ display:inline-block; font-size:10.5px; margin:0 0 0 6px; vertical-align:middle; letter-spacing:0; }   /* 蓋過 .cell span 的整寬設定 */
   .arow{ background:#fff; border:1px solid var(--line); border-radius:13px; padding:11px 13px; margin-bottom:8px; }
   .arow.pend{ border-left:3px solid var(--amber); }
   .row{ display:flex; justify-content:space-between; align-items:center; }
@@ -1294,7 +1296,7 @@
     if (m.leave) return '<div class="myleave"><small>今日</small>' + esc(m.leave) + '</div>';
     return '<div class="myday">' +
       '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班' + (m.inPending ? '（待核准）' : '') + '</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
-      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班' + (m.outPending ? '（待核准）' : '') + '</span><b>' + esc(m.out || '未打卡') + '</b></div>' +
+      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班' + (m.outPending ? '（待核准）' : '') + '</span><b>' + esc(m.out || '未打卡') + (m.outNext ? '<span class="tag nx" title="隔天凌晨打的卡">隔日</span>' : '') + '</b></div>' +
       '</div>';
   }
   function ovTfActions(x) {
@@ -1505,7 +1507,7 @@
           if (pp.leave) { html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">' + esc(pp.leave) + '</td></tr>'; return; }
           var miss = pp.in ? '' : ' class="miss"';
           var ci = pp.in ? (esc(pp.in) + (pp.inPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
-          var co = pp.out ? (esc(pp.out) + (pp.outPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
+          var co = pp.out ? ((pp.outNext ? '<b>' + esc(pp.out) + '</b><span class="tag nx" title="隔天凌晨打的卡">隔日</span>' : esc(pp.out)) + (pp.outPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
           html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td' + (pp.in ? '' : ' class="nopunch"') + '>' + ci + '</td><td' + (pp.out ? '' : ' class="nopunch"') + '>' + co + '</td></tr>';
         });
         html += '</table></div>';
