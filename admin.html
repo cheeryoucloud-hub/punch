@@ -361,6 +361,41 @@
   .ppick .pk i{ font-size:9.5px; color:var(--amber); font-style:normal; margin-left:auto; }
   .modal .row2{ display:flex; gap:10px; } .modal .row2>*{ flex:1; }
   .modal .acts{ display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+  /* 權限設定視窗（帳號權限頁）*/
+  .modal .box.wide{ max-width:780px; }
+  .pe-row3{ display:grid; grid-template-columns:1.1fr 1.3fr 1fr; gap:12px; }
+  .pe-sec{ font-size:13px; font-weight:800; margin:14px 0 8px; display:flex; align-items:center; gap:8px; }
+  .modal .pe-tones{ display:flex; gap:6px; flex-wrap:wrap; }
+  .modal .pe-tones label,.modal .pe-seg label,.modal .pe-scope label{ display:block; margin:0; cursor:pointer; font-size:inherit; color:inherit; font-weight:inherit; }
+  .modal .pe-tones input,.modal .pe-seg input,.modal .pe-scope input{ position:absolute; opacity:0; width:1px; height:1px; padding:0; }
+  .pe-tones .pill{ border:2px solid transparent; padding:4px 11px; }
+  .pe-tones input:checked + .pill{ border-color:currentColor; }
+  .pe-tones input:focus-visible + .pill,.pe-seg input:focus-visible + span,.pe-scope input:focus-visible + span{ outline:2px solid var(--brand); outline-offset:2px; }
+  .pe-scope{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .pe-scope span{ display:block; height:100%; border:1px solid var(--line); border-radius:11px; padding:9px 12px; font-size:13px; font-weight:700; color:var(--ink); }
+  .pe-scope span small{ display:block; font-size:11.5px; color:var(--muted); font-weight:600; }
+  .pe-scope input:checked + span{ border-color:var(--brand); background:var(--brand-soft); color:var(--brand-ink); }
+  .pe-ptbl{ width:100%; border-collapse:collapse; font-size:13px; }
+  .pe-ptbl td{ padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  .pe-ptbl tr.grp td{ font-size:10.5px; letter-spacing:1px; color:var(--muted); font-weight:700; padding-top:12px; border-bottom:none; }
+  .pe-ptbl td.pn{ font-weight:700; white-space:nowrap; width:1%; padding-right:18px; }
+  .pe-seg{ display:inline-flex; flex-wrap:wrap; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:2px; }
+  .pe-seg span{ display:block; padding:4px 11px; border-radius:8px; font-size:12px; font-weight:700; color:var(--muted); white-space:nowrap; }
+  .pe-seg input:checked + span{ background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  .pe-seg input:checked + span.lv-view{ color:var(--blue); } .pe-seg input:checked + span.lv-period{ color:var(--amber); } .pe-seg input:checked + span.lv-edit{ color:var(--brand-ink); }
+  .pe-seg input:disabled + span,.pe-scope input:disabled + span{ cursor:not-allowed; }
+  .pe-checks{ display:flex; flex-direction:column; gap:8px; }
+  .modal .pe-checks label{ display:flex; gap:10px; align-items:flex-start; margin:0; border:1px solid var(--line); border-radius:11px; padding:9px 12px; cursor:pointer; font-size:13px; font-weight:700; color:var(--ink); }
+  .pe-checks label small{ display:block; font-size:11.5px; color:var(--muted); font-weight:600; }
+  .modal .pe-checks input{ width:16px; height:16px; flex:0 0 16px; margin-top:3px; padding:0; accent-color:var(--brand); }
+  .modal textarea.pe-note{ width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); color:var(--ink); font-size:14px; font-family:inherit; line-height:1.5; resize:vertical; }
+  .pe-lock{ background:var(--danger-soft); color:var(--danger); border-radius:10px; padding:8px 12px; font-size:12.5px; font-weight:700; margin-top:4px; }
+  .pe-info{ background:var(--blue-soft); color:var(--blue); border-radius:10px; padding:8px 12px; font-size:12.5px; font-weight:600; margin-top:4px; }
+  .pe-err{ color:var(--danger); font-size:12.5px; font-weight:700; margin-right:auto; align-self:center; }
+  .modal .box.wide .acts{ position:sticky; bottom:-20px; background:var(--surface); padding:10px 0 6px; border-top:1px solid var(--line); margin-top:12px; }
+  table.permtbl{ min-width:900px; font-size:12.5px; }
+  table.permtbl td{ vertical-align:top; }
+  @media(max-width:700px){ .pe-row3,.pe-scope{ grid-template-columns:1fr; } .pe-ptbl td.pn{ white-space:normal; width:auto; } }
 
   /* 出勤表(照公司 A4 格式) */
   .report{ background:#fff; color:#000; border:none; border-radius:0; padding:0; }   /* 與列印一致 */
@@ -571,16 +606,43 @@ var NAV=[
   {k:'geo',t:'打卡座標',g:'基本資料'},{k:'acct',t:'帳號權限',g:'基本資料'},
   {k:'maint',t:'年度歸檔／備份',g:'資料維護'}
 ];
-function isHR(){ return ME.role==='管理員'||ME.role==='人資'; }
-function viewAll(){ return ME.role==='管理員'||ME.role==='人資'||ME.role==='主管'; }
-function allowScreens(){
-  var r=ME.role;
-  // 人資管理（公司公告／LINE提醒）只開給管理員與人資
-  if(r==='管理員') return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','export','emp','site','geo','acct','maint'];
-  if(r==='人資')   return ['notice','remind','overview','punch','punchlog','leave','transfer','roster','report','export','emp','site','geo','acct'];
-  if(r==='主管') return ['overview','punch','punchlog','leave','transfer','roster','report','emp','site','geo'];
-  if(r==='工地負責人') return ['overview','punch','punchlog','leave','transfer','roster'];
-  return ['overview'];
+/* ===================== 權限（帳號權限頁由管理員設定;登入時伺服器帶回 ME.perm）===================== */
+var PERM_LV_TEXT={none:'不開放',view:'檢視',period:'期別內可填',edit:'編輯',export:'可匯出',run:'可執行'};
+var PERM_PAGE_LV={notice:['none','view','edit'],remind:['none','view','edit'],overview:['none','view'],punch:['none','view'],
+  punchlog:['none','view','edit'],leave:['none','view','period','edit'],transfer:['none','view'],roster:['none','view','edit'],
+  report:['none','view','edit'],export:['none','export'],emp:['none','view','edit'],site:['none','view','edit'],
+  geo:['none','view','edit'],acct:['none','view','edit'],maint:['none','run']};
+var PERM_TONE_TEXT=[['bad','紅'],['info','藍'],['wait','橘'],['ok','綠'],['mut','灰']];
+/** 伺服器沒帶權限時（舊版後端／舊的登入狀態）的後備,與後端預設相同 */
+function defaultPerm(role){
+  function P(o){ var m={}; Object.keys(PERM_PAGE_LV).forEach(function(k){ m[k]=o[k]||'none'; }); return m; }
+  var all={}; Object.keys(PERM_PAGE_LV).forEach(function(k){ var l=PERM_PAGE_LV[k]; all[k]=l[l.length-1]; });
+  if(role==='管理員') return {name:role,tone:'bad',scope:'all',pages:all,sign:{own:true,proxy:true,revoke:true},builtin:true,locked:true};
+  if(role==='人資'){ var hr=P(all); hr.maint='none'; return {name:role,tone:'info',scope:'all',pages:hr,sign:{own:true,proxy:true,revoke:true},builtin:true}; }
+  if(role==='主管') return {name:role,tone:'wait',scope:'own',pages:P({overview:'view',punch:'view',punchlog:'view',leave:'view',transfer:'view',roster:'view',report:'view',emp:'view',site:'view',geo:'view'}),sign:{own:true},builtin:true};
+  if(role==='工地負責人') return {name:role,tone:'mut',scope:'own',pages:P({overview:'view',punch:'view',punchlog:'view',leave:'period',transfer:'view',roster:'view'}),sign:{own:true},builtin:true};
+  return {name:role||'一般',tone:'mut',scope:'own',pages:P({overview:'view'}),sign:{own:true}};
+}
+function myPerm(){ return ME.perm||defaultPerm(ME.role); }
+function PV(k){ return (myPerm().pages||{})[k]||'none'; }
+/** 該頁的最高操作（編輯／可匯出／可執行）;休假登錄「期別內可填」由伺服器依期別另外判斷 */
+function canEd(k){ var v=PV(k); return v==='edit'||v==='export'||v==='run'; }
+function isAdmin(){ return !!myPerm().locked; }
+function allowScreens(){ return NAV.map(function(n){ return n.k; }).filter(function(k){ return PV(k)!=='none'; }); }
+function homeScreen(){ var al=allowScreens(); return al.indexOf('overview')>=0?'overview':(al[0]||'overview'); }
+/** 權限可能被管理員改過：進後台時跟伺服器對一次,有變就重畫（沒權限的頁面退回首頁）*/
+function refreshPerm(){
+  api('admin_whoami',{}).then(function(j){
+    if(!j||!j.ok||!j.perm) return;
+    var before=JSON.stringify(ME.perm||null);
+    ME.perm=j.perm; if(j.role) ME.role=j.role; if(j.name) ME.name=j.name;
+    if($('waName')) $('waName').textContent=ME.name;
+    try{ sessionStorage.setItem('qy_me',JSON.stringify(ME)); }catch(e){}
+    if(JSON.stringify(j.perm)===before) return;
+    if($('waRole')) $('waRole').textContent=ME.role;
+    if(allowScreens().indexOf(state.screen)<0) state.screen=homeScreen();
+    renderNav(); render();
+  });
 }
 
 /* ===================== 登入 ===================== */
@@ -592,7 +654,7 @@ function doLogin(){
     .then(function(r){return r.text();}).then(function(t){ var j; try{j=JSON.parse(t);}catch(e){j={ok:false,msg:'回應格式錯誤'};}
       $('lgBtn').textContent='登入'; $('lgBtn').disabled=false;
       if(!j.ok){ $('lgErr').textContent=j.msg||'登入失敗'; return; }
-      TOKEN=j.token; ME={name:j.name,role:j.role};
+      TOKEN=j.token; ME={name:j.name,role:j.role,perm:j.perm||null};
       try{ sessionStorage.setItem('qy_tok',TOKEN); sessionStorage.setItem('qy_me',JSON.stringify(ME)); }catch(e){}
       enterApp();
     }).catch(function(){ $('lgBtn').textContent='登入'; $('lgBtn').disabled=false; $('lgErr').textContent='連線失敗,請確認部署網址'; });
@@ -632,9 +694,10 @@ function enterApp(){
   state.ym=ymNow(); state.ovDate='';
   // 重新整理後停在上次的分頁（記在 sessionStorage,同一個分頁視窗有效）;沒有權限的分頁回到總覽
   var last=''; try{ last=sessionStorage.getItem('qy_screen')||''; }catch(e){}
-  state.screen=(last&&allowScreens().indexOf(last)>=0)?last:'overview';
+  state.screen=(last&&allowScreens().indexOf(last)>=0)?last:homeScreen();
   renderNav(); render();
   getEmps(false,function(){}); getEmps(true,function(){});   // 預抓名單,篩選下拉秒開
+  refreshPerm();
 }
 function renderNav(){
   try{ sessionStorage.setItem('qy_screen',state.screen); }catch(e){}   // 記住目前分頁,重新整理後回到這裡
@@ -728,10 +791,10 @@ function loadOverview(){
 var NTC=null;
 var NTC_CAT_CLS={'重要公告':'bad','一般公告':'mut','活動公告':'ok','公司宣導':'info'};
 function scNotice(){
-  $('main').innerHTML=pageTop('公司公告',!isHR())+
+  $('main').innerHTML=pageTop('公司公告',!canEd('notice'))+
     '<div class="panel" style="padding:14px 16px"><b style="font-size:14px">發布給全體員工的公告</b>'+
     '<div class="hint" style="margin-top:6px">員工在 LINE 的「公司公告」看得到（需已完成綁定）。狀態為「草稿」的不會出現在員工端。</div></div>'+
-    '<div class="toolbar">'+(isHR()?'<button class="add" onclick="editNotice(null)">＋ 新增公告</button>':'<span class="hint">僅人資／管理員可編輯</span>')+'<button class="btn" onclick="previewNotice()">👁 員工端預覽</button></div>'+
+    '<div class="toolbar">'+(canEd('notice')?'<button class="add" onclick="editNotice(null)">＋ 新增公告</button>':'<span class="hint">你的權限只能檢視</span>')+'<button class="btn" onclick="previewNotice()">👁 員工端預覽</button></div>'+
     '<div class="panel"><div class="tblwrap" id="ntcBody"><div class="spin">載入中…</div></div></div>';
   loadNotice();
 }
@@ -823,7 +886,7 @@ function scPunchLog(){
     '<select id="plType" onchange="plSet(\'type\',this.value)">'+['','上班','下班','加班結束'].map(function(x){return '<option value="'+x+'"'+(PLOG.type===x?' selected':'')+'>'+(x||'全部類型')+'</option>';}).join('')+'</select>'+
     '<select id="plMethod" onchange="plSet(\'method\',this.value)">'+['','定點','外勤','補打'].map(function(x){return '<option value="'+x+'"'+(PLOG.method===x?' selected':'')+'>'+(x||'全部方式')+'</option>';}).join('')+'</select>'+
     '<span class="spacer"></span>'+
-    (isHR()?'<button class="add" onclick="addPunchRow()">＋ 新增補登</button>':'')+
+    (canEd('punchlog')?'<button class="add" onclick="addPunchRow()">＋ 新增補登</button>':'')+
     '<span class="hint" id="plCount"></span></div>'+
     '<div id="plBody"><div class="panel"><div class="spin">載入中…</div></div></div>';
   loadPunchLog();
@@ -1189,11 +1252,11 @@ function rmdCardHtml(target,text,time,targetLabel,icon,title,color,showBtn){
 }
 
 function scRemind(){
-  $('main').innerHTML=pageTop('LINE 提醒',!isHR())+
+  $('main').innerHTML=pageTop('LINE 提醒',!canEd('remind'))+
     '<div class="panel" style="padding:14px 16px"><b style="font-size:14px">每日固定時間,自動以 LINE 卡片提醒指定對象</b>'+
     '<div class="hint" style="margin-top:6px">系統每 5 分鐘檢查一次,到點後 5 分鐘內發送;同一筆每天只發一次。未綁定 LINE 的員工不會收到。</div></div>'+
     '<div id="rmdQuota"></div>'+
-    '<div class="toolbar">'+(isHR()?'<button class="add" onclick="editRemind(null)">＋ 新增提醒</button>':'<span class="hint">僅人資／管理員可設定</span>')+'</div>'+
+    '<div class="toolbar">'+(canEd('remind')?'<button class="add" onclick="editRemind(null)">＋ 新增提醒</button>':'<span class="hint">你的權限只能檢視</span>')+'</div>'+
     '<div class="panel"><div class="tblwrap" id="rmdBody"><div class="spin">載入中…</div></div></div>'+
     '<div id="rmdEvents"></div>';
   loadRemind(); loadQuota();
@@ -1824,7 +1887,7 @@ function bindRosterClicks(){
   var host=$('rHost'); if(!host)return;
   host.onclick=function(e){ if(!EDIT_MODE)return; var t=e.target.closest?e.target.closest('td,th'):null; if(!t)return;
     if(t.classList.contains('rcell')&&t.getAttribute('data-emp'))cycleRoster(t);
-    else if(t.classList.contains('dcol'))cycleSpecial(t); };
+    else if(t.classList.contains('dcol')&&!(ROSTER_DATA&&ROSTER_DATA.editLevel==='period'))cycleSpecial(t); };   // 特殊日限完整編輯
   host.oncontextmenu=function(e){ if(!EDIT_MODE)return; var t=e.target.closest?e.target.closest('td'):null; if(!t)return;
     if(t.classList.contains('sumc')&&t.getAttribute('data-emp')){ e.preventDefault(); openCellNote(t); }   // 例假天數欄：純備註
     else if(t.classList.contains('rname')&&t.getAttribute('data-emp')){ e.preventDefault(); openQuickName(t); }
@@ -1884,21 +1947,22 @@ function rSiteBox(j){
     '</select>';
 }
 function renderRosterScreen(){
-  var isLeave=(RSCREEN==='leave'); var j=ROSTER_DATA; var canEdit=isHR()&&j.canEdit;
+  var isLeave=(RSCREEN==='leave'); var j=ROSTER_DATA; var canEdit=!!j.canEdit;
+  var fullEdit=canEdit&&j.editLevel!=='period';     // 期別內可填：只能填自己工地的人,不能設特殊日／注意事項
   rmSyncTitle();
   var tb=mstep()+rSiteBox(j);
   if(j.locked&&!canEdit) tb+='<span class="spacer"></span><span class="pill bad">🔒 本月已鎖定,變更請走「調休申請」</span>'+(isLeave?'':' <button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
   else if(canEdit){
-    if(j.locked) tb+='<span class="pill bad">🔒 已鎖定（人資／管理員仍可修正）</span>';
-    if(EDIT_MODE) tb+='<span class="hint">'+(isLeave?'點格循環：空白→●→特→依預訂　·　右鍵格子＝詳細　·　右鍵人名＝快速輸入':'點日期表頭＝特殊日上色')+'</span><span class="spacer"></span><button class="btn" onclick="rosterCancelEdit()">取消</button><button class="add" id="rSaveBtn" onclick="saveRoster()">'+(isLeave?'儲存預定':'儲存輪休表')+'</button>';
+    if(j.locked) tb+='<span class="pill bad">🔒 已鎖定（有完整編輯權限者仍可修正）</span>';
+    if(EDIT_MODE) tb+='<span class="hint">'+(isLeave?'點格循環：空白→●→特→依預訂　·　右鍵格子＝詳細　·　右鍵人名＝快速輸入'+(fullEdit?'':'　·　只能填自己工地的人'):'點日期表頭＝特殊日上色')+'</span><span class="spacer"></span><button class="btn" onclick="rosterCancelEdit()">取消</button><button class="add" id="rSaveBtn" onclick="saveRoster()">'+(isLeave?'儲存預定':'儲存輪休表')+'</button>';
     else tb+='<span class="spacer"></span>'+(isLeave?'':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>')+'<button class="add" onclick="rosterEnterEdit()">✎ 進入編輯模式</button>';
-  } else tb+='<span class="spacer"></span>'+(isLeave?'<span class="hint">主管唯讀,排休由人資登錄</span>':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
+  } else tb+='<span class="spacer"></span>'+(isLeave?'<span class="hint">'+(PV('leave')==='period'?'本期尚未開放登錄（或已鎖定）,開放後才能填寫':'唯讀檢視,排休由人資登錄')+'</span>':'<button class="btn" onclick="exportRosterExcel()">匯出 Excel</button>');
   $('rToolbar').innerHTML=tb;
   var host=$('rHost'); host.className=(canEdit&&EDIT_MODE)?'editing':'';
   host.innerHTML=rosterHtml(j)+rmLegend(isLeave);
   refreshRestCounts();
-  $('rNote').innerHTML=isLeave?'':noteBox(j.note, canEdit&&EDIT_MODE);   // 注意事項只在輪休表
-  if(isLeave&&$('rPeriod')) renderPeriod($('rPeriod'), j.period, isHR());   // 人資/管理員永遠可設定期別(含解鎖)
+  $('rNote').innerHTML=isLeave?'':noteBox(j.note, fullEdit&&EDIT_MODE);   // 注意事項只在輪休表
+  if(isLeave&&$('rPeriod')) renderPeriod($('rPeriod'), j.period, canEd('leave'));   // 休假登錄完整編輯者永遠可設定期別(含解鎖)
   bindRosterClicks();
 }
 function rosterEnterEdit(){ EDIT_MODE=true; NOTE_CHANGES={}; renderRosterScreen(); }
@@ -2184,26 +2248,18 @@ var BASE_META={
   acct:{title:'帳號權限',key:'帳號',add:'新增帳號'}
 };
 function scEmp(){ baseScreen('emp'); } function scSite(){ baseScreen('site'); } function scGeo(){ baseScreen('geo'); } function scAcct(){ baseScreen('acct'); }
-var ROLE_HELP='<div class="panel" style="padding:14px 16px"><b style="font-size:14px">各權限可做的事</b>'+
-  '<div class="tblwrap" style="margin-top:10px"><table class="tbl" style="font-size:12.5px">'+
-  '<thead><tr><th style="width:110px">權限</th><th>檢視範圍</th><th>可編輯</th><th>可簽核</th></tr></thead><tbody>'+
-  '<tr><td><span class="pill bad">管理員</span></td><td>全公司</td><td>全部（含帳號權限）</td><td>全部,可代簽、可取消簽核</td></tr>'+
-  '<tr><td><span class="pill info">人資</span></td><td>全公司</td><td>休假登錄／輪休表／出勤表／基本資料</td><td>全部,可代簽、可取消簽核</td></tr>'+
-  '<tr><td><span class="pill wait">主管</span></td><td>自己負責的工地</td><td>不可編輯（唯讀）</td><td>自己工地的第二關（工地主管）</td></tr>'+
-  '<tr><td><span class="pill mut">工地負責人</span></td><td>自己負責的工地（總覽／打卡申請／調休／休假登錄／輪休表）</td><td>休假登錄：開放期別內可填自己工地</td><td>自己工地的第一關（工地負責人）</td></tr>'+
-  '</tbody></table></div>'+
-  '<div class="hint" style="margin-top:8px">＊「工地主管／工地負責人」由〈工地資料〉決定,不是由這裡的權限欄決定;此處只決定登入後台能看到什麼。</div></div>';
 function baseScreen(which){
-  var meta=BASE_META[which]; var edit=isHR();
-  $('main').innerHTML=pageTop(meta.title,!edit)+(which==='acct'?ROLE_HELP:'')+
+  var meta=BASE_META[which]; var edit=canEd(which);
+  $('main').innerHTML=pageTop(meta.title,!edit)+(which==='acct'?'<div id="permBox"><div class="panel"><div class="spin">載入權限…</div></div></div>':'')+
     '<div class="toolbar">'+(edit?'<button class="add" onclick="editBase(\''+which+'\',null)">＋ '+meta.add+'</button>':'')+'<input id="baseSearch" placeholder="搜尋" oninput="filterBase()" style="width:190px" class="spacer"></div>'+
     '<div class="panel"><div class="tblwrap" id="baseBody"><div class="spin">載入中…</div></div></div>';
   api('admin_listBase',{}).then(function(j){
     if(!$('baseBody')) return;
-    if(!j.ok){ put('baseBody','<div class="empty">'+esc(j.msg||'讀取失敗（需人資或管理員）')+'</div>'); return; }
+    if(!j.ok){ put('baseBody','<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'); return; }
     state.base=j.data; renderBase(which,edit);
     if(j.pwFixed) toast('已將 '+j.pwFixed+' 組明碼密碼自動轉為 SHA-256 雜湊');
   });
+  if(which==='acct') loadPerms();
 }
 function mapThumb(lat,lng,name,radius){
   var la=Number(lat), ln=Number(lng);
@@ -2226,7 +2282,8 @@ function openGeoMap(la,ln,rd,name){
     function(){ closeModal(); });
 }
 function pillStat(v){ v=String(v); if(v==='在職')return '<span class="pill ok">在職</span>'; if(v==='離職')return '<span class="pill mut">離職</span>'; if(v==='啟用')return '<span class="pill ok">啟用</span>'; if(v==='停用')return '<span class="pill mut">停用</span>'; return esc(v); }
-function pillRole(v){ var m={'管理員':'bad','人資':'info','主管':'wait','工地負責人':'mut','一般':'mut'}[String(v)]||'mut'; return '<span class="pill '+m+'">'+esc(v)+'</span>'; }
+function pillRole(v){ var nm=String(v==null?'':v), hit=(PERMS||[]).filter(function(x){ return x.name===nm; })[0];
+  var m=hit?hit.tone:({'管理員':'bad','人資':'info','主管':'wait','工地負責人':'mut'}[nm]||'mut'); return '<span class="pill '+m+'">'+esc(nm)+'</span>'; }
 function renderBase(which,edit){
   var meta=BASE_META[which], t=state.base[which]; if(!t){ $('baseBody').innerHTML='<div class="empty">無資料</div>'; return; }
   var heads=t.headers.filter(Boolean);
@@ -2241,7 +2298,8 @@ function renderBase(which,edit){
       if(x==='密碼') return '<td class="muted">'+(v?'••••••（已設定）':'—')+'</td>';
       if(x==='LINE_userID') return '<td>'+(v?'<span class="pill ok">已綁定</span>':'<span class="pill bad">未綁定</span>')+'</td>';
       return '<td class="muted">'+esc(v==null||v===''?'—':v)+'</td>';
-    }).join('')+(edit?'<td class="r"><div class="actions"><button class="btn sm" onclick="editBase(\''+which+'\','+i+')">編輯</button><button class="btn rj sm" onclick="delBase(\''+which+'\','+i+')">刪</button></div></td>':'')+'</tr>';
+    }).join('')+(edit?'<td class="r">'+((which==='acct'&&!isAdmin()&&String(r['權限']||'').trim()==='管理員')?'<span class="hint">僅管理員可修改</span>':
+      '<div class="actions"><button class="btn sm" onclick="editBase(\''+which+'\','+i+')">編輯</button><button class="btn rj sm" onclick="delBase(\''+which+'\','+i+')">刪</button></div>')+'</td>':'')+'</tr>';
   });
   if(!t.rows.length) h+='<tr><td colspan="'+(heads.length+(edit?1:0)+(isGeo?1:0))+'"><div class="empty" style="padding:20px 0">尚無資料</div></td></tr>';
   $('baseBody').innerHTML=h+'</tbody></table>';
@@ -2254,7 +2312,15 @@ function editBase(which,idx){
     var v=row[x]==null?'':row[x];
     if(which==='emp'&&x==='LINE_userID') return '<div class="field"><label>LINE_userID（綁定,通常由員工自行綁定）</label><input id="f_'+x+'" value="'+esc(v)+'"></div>';
     if(which==='acct'&&x==='密碼') return '<div class="field"><label>密碼'+(idx==null?'':'（留空＝不變）')+'</label><input id="f_'+x+'" type="text" placeholder="'+(idx==null?'設定密碼':'留空不修改')+'"></div>';
-    if(which==='acct'&&x==='權限') return '<div class="field"><label>權限</label><select id="f_'+x+'">'+['管理員','人資','主管','工地負責人','一般'].map(function(o){return '<option'+(String(v)===o?' selected':'')+'>'+o+'</option>';}).join('')+'</select></div>';
+    if(which==='acct'&&x==='權限'){
+      var names=(PERMS&&PERMS.length)?PERMS.map(function(q){ return q.name; }):['管理員','人資','主管','工地負責人'];
+      var cur=String(v||'').trim()||(names.indexOf('工地負責人')>=0?'工地負責人':names[names.length-1]);
+      if(names.indexOf(cur)<0) names=names.concat([cur]);             // 舊資料的權限名稱也列出來,避免開啟就被改掉
+      return '<div class="field"><label>權限</label><select id="f_'+x+'">'+names.map(function(o){
+        var lock=(o==='管理員'&&!isAdmin()&&cur!=='管理員');
+        return '<option value="'+esc(o)+'"'+(cur===o?' selected':'')+(lock?' disabled':'')+'>'+esc(o)+(lock?'（僅管理員可指定）':'')+'</option>'; }).join('')+
+        '</select><div class="hint" style="margin-top:4px">選項來自上方「各權限可做的事」</div></div>';
+    }
     if(x==='在職狀態') return '<div class="field"><label>在職狀態</label><select id="f_'+x+'"><option'+(String(v)==='在職'?' selected':'')+'>在職</option><option'+(String(v)==='離職'?' selected':'')+'>離職</option></select></div>';
     if(x==='是否需打卡') return '<div class="field"><label>是否需打卡</label><select id="f_'+x+'"><option'+(String(v)!=='否'?' selected':'')+'>是</option><option'+(String(v)==='否'?' selected':'')+'>否</option></select></div>';
     if(x==='狀態'&&which==='geo') return '<div class="field"><label>狀態</label><select id="f_'+x+'"><option'+(String(v)!=='停用'?' selected':'')+'>啟用</option><option'+(String(v)==='停用'?' selected':'')+'>停用</option></select></div>';
@@ -2312,6 +2378,139 @@ function delBase(which,idx){ var meta=BASE_META[which], row=state.base[which].ro
   if(!confirm('確定刪除「'+key+'」?此動作無法復原'))return;
   busyOn('刪除中…');
   api('admin_deleteRow',{sheet:which,key:key}).then(function(j){ busyOff(); if(!j.ok){alert(j.msg||'刪除失敗');return;} toast('已刪除'); if(which==='emp'||which==='site') empCacheClear(); baseScreen(which); });
+}
+
+/* ===================== 權限設定（帳號權限頁上方;只有管理員能改）===================== */
+var PERMS=null, PERM_CAN=false;
+function permPages(){ return NAV.filter(function(n){ return !!PERM_PAGE_LV[n.k]; }); }
+function permGroups(){ var g=[]; permPages().forEach(function(n){ if(g.indexOf(n.g)<0) g.push(n.g); }); return g; }
+/** 由設定自動產生「檢視範圍／可編輯／可簽核」說明文字,說明就不會跟實際權限對不上 */
+function permText(r){
+  var pages=permPages(), pg=r.pages||{};
+  var scope=r.scope==='all'?'全公司':'自己負責的工地', view;
+  var vis=pages.filter(function(p){ return (pg[p.k]||'none')!=='none'; });
+  var hid=pages.filter(function(p){ return (pg[p.k]||'none')==='none'; });
+  if(!vis.length) view='無可檢視頁面';
+  else if(!hid.length) view=scope;
+  else if(hid.length<=2) view=scope+'（〈'+hid.map(function(p){ return p.t; }).join('〉〈')+'〉除外）';
+  else view=scope+'（'+vis.map(function(p){ return p.t; }).join('／')+'）';
+  var out=[], total=0, on=0;
+  permGroups().forEach(function(g){
+    var ps=pages.filter(function(p){ var l=PERM_PAGE_LV[p.k]; return p.g===g&&(l.indexOf('edit')>=0||l.indexOf('run')>=0); });
+    var ed=ps.filter(function(p){ return pg[p.k]==='edit'||pg[p.k]==='run'; });
+    total+=ps.length; on+=ed.length;
+    if(ps.length>1&&ed.length===ps.length) out.push(g); else ed.forEach(function(p){ out.push(p.t); });
+    ps.forEach(function(p){ if(pg[p.k]==='period') out.push(p.t+'：開放期別內可填自己工地'); });
+  });
+  var edit=(on===total)?'全部（含帳號權限）':(out.length?out.join('／'):'不可編輯（唯讀）');
+  var sg=r.sign||{}, sign;
+  if(sg.proxy) sign='全部,可代簽'+(sg.revoke?'、可取消簽核':'');
+  else { var t=[]; if(sg.own) t.push('自己工地的簽核（第一關工地負責人／第二關工地主管）'); if(sg.revoke) t.push('可取消簽核'); sign=t.length?t.join('、'):'不可簽核'; }
+  return { view:view, edit:edit, sign:sign };
+}
+function loadPerms(){
+  api('admin_permList',{}).then(function(j){
+    if(!$('permBox')) return;
+    if(!j.ok){ put('permBox','<div class="panel"><div class="empty">'+esc(j.msg||'權限讀取失敗')+'</div></div>'); return; }
+    PERMS=j.roles||[]; PERM_CAN=!!j.canEdit; renderPermBox();
+    if(state.base&&state.base.acct&&$('baseTable')) renderBase('acct', canEd('acct'));   // 權限顏色可能變了
+  });
+}
+function renderPermBox(){
+  var h='<div class="panel" style="padding:14px 16px"><div class="toolbar" style="margin-bottom:0">'+
+    '<b style="font-size:14px">各權限可做的事</b><span class="hint">檢視範圍／可編輯／可簽核 依權限設定自動產生</span><span class="spacer"></span>'+
+    (PERM_CAN?'<button class="add" onclick="editPerm(null)">＋ 新增權限</button>':'<span class="pill wait">僅管理員可修改</span>')+'</div>'+
+    '<div class="tblwrap" style="margin-top:10px"><table class="tbl permtbl"><thead><tr><th style="width:120px">權限</th>'+
+    '<th style="width:22%">檢視範圍</th><th style="width:22%">可編輯</th><th style="width:20%">可簽核</th><th>備註</th><th class="r">操作</th></tr></thead><tbody>';
+  PERMS.forEach(function(r,i){
+    var t=permText(r);
+    h+='<tr><td>'+pillRole(r.name)+'<div class="hint" style="margin-top:4px">'+(r.used||0)+' 個帳號'+(r.builtin?'・內建':'')+'</div></td>'+
+      '<td>'+esc(t.view)+'</td><td>'+esc(t.edit)+'</td><td>'+esc(t.sign)+'</td>'+
+      '<td class="muted" style="white-space:pre-line">'+(r.note?esc(r.note):'—')+'</td>'+
+      '<td class="r"><div class="actions">'+(PERM_CAN
+        ?'<button class="btn sm" onclick="editPerm('+i+')">權限設定</button><button class="btn rj sm" onclick="delPerm('+i+')"'+(r.builtin?' disabled title="內建權限不可刪除"':'')+'>刪</button>'
+        :'<button class="btn sm" onclick="editPerm('+i+',true)">查看</button>')+'</div></td></tr>';
+  });
+  h+='</tbody></table></div><div class="hint" style="margin-top:8px">＊「工地主管／工地負責人」是誰由〈工地資料〉決定;這裡決定的是該權限登入後台能看到哪些頁面、能做什麼。改完立即生效,對方重新整理後台側邊欄就會更新。</div></div>';
+  $('permBox').innerHTML=h;
+}
+function peRadio(name){ var el=document.querySelector('input[name="'+name+'"]:checked'); return el?el.value:''; }
+function peErr(msg){ var e=$('peErr'); if(e) e.textContent=msg||''; }
+function editPerm(idx,readOnly){
+  var isNew=(idx==null), tpl=(PERMS||[]).filter(function(x){ return x.name==='工地負責人'; })[0];
+  var r=isNew?{name:'',tone:'ok',scope:'own',pages:JSON.parse(JSON.stringify((tpl&&tpl.pages)||{})),sign:{own:true,proxy:false,revoke:false},note:''}:PERMS[idx];
+  var lockAll=!!readOnly||!!r.locked;              // 管理員固定全開;非管理員只能看
+  function dis(on){ return on?' disabled':''; }
+  var rows='';
+  permGroups().forEach(function(g){
+    rows+='<tr class="grp"><td colspan="2">'+esc(g)+'</td></tr>';
+    permPages().filter(function(p){ return p.g===g; }).forEach(function(p){
+      var cur=(r.pages||{})[p.k]||'none';
+      rows+='<tr><td class="pn">'+esc(p.t)+'</td><td><div class="pe-seg">'+PERM_PAGE_LV[p.k].map(function(lv){
+        var cls=lv==='none'?'':(lv==='view'?'lv-view':(lv==='period'?'lv-period':'lv-edit'));
+        return '<label><input type="radio" name="pe_pg_'+p.k+'" value="'+lv+'"'+(cur===lv?' checked':'')+dis(lockAll)+'><span class="'+cls+'">'+PERM_LV_TEXT[lv]+'</span></label>';
+      }).join('')+'</div>'+(p.k==='acct'?' <span class="hint">「各權限可做的事」固定只有管理員可改</span>':'')+'</td></tr>';
+    });
+  });
+  var checks=[['own','簽核自己負責的工地','打卡申請、調休：工地負責人簽第一關、工地主管簽第二關（人選依〈工地資料〉）'],
+    ['proxy','代簽全公司','可替任何工地的負責人／主管簽核,簽名會標註「（'+(r.name||'此權限')+'代簽）」'],
+    ['revoke','取消簽核','可退回已核准的調休,並還原排休表']].map(function(c){
+      return '<label><input type="checkbox" id="pe_'+c[0]+'"'+((r.sign||{})[c[0]]?' checked':'')+dis(lockAll)+'><span>'+c[1]+'<small>'+esc(c[2])+'</small></span></label>';
+    }).join('');
+  var h='<h3>'+(isNew?'新增權限':(readOnly?'查看權限':'權限設定')+' · '+esc(r.name))+'</h3>'+
+    '<div class="pe-row3">'+
+      '<div class="field"><label for="pe_name">權限名稱</label><input id="pe_name" maxlength="20" placeholder="例如：會計" value="'+esc(r.name)+'"'+dis(!!r.builtin||!!readOnly)+'>'+
+        (r.builtin&&!readOnly?'<div class="hint" style="margin-top:4px">內建權限名稱不可改（LINE 提醒等依名稱發送）</div>':'')+'</div>'+
+      '<div class="field"><label>標籤顏色</label><div class="pe-tones">'+PERM_TONE_TEXT.map(function(t){
+        return '<label><input type="radio" name="pe_tone" value="'+t[0]+'"'+(r.tone===t[0]?' checked':'')+dis(readOnly)+'><span class="pill '+t[0]+'">'+t[1]+'</span></label>'; }).join('')+'</div></div>'+
+      (isNew?'<div class="field"><label for="pe_copy">從現有權限複製設定</label><select id="pe_copy"><option value="">（不複製）</option>'+
+          (PERMS||[]).filter(function(x){ return !x.locked; }).map(function(x){ return '<option value="'+esc(x.name)+'"'+(x.name==='工地負責人'?' selected':'')+'>'+esc(x.name)+'</option>'; }).join('')+'</select></div>'
+        :'<div class="field"><label>使用中帳號</label><div style="padding:8px 0;font-weight:700">'+(r.used||0)+' 個</div></div>')+
+    '</div>'+
+    (r.locked&&!readOnly?'<div class="pe-lock">管理員固定擁有全部權限,不能調整（避免把所有人鎖在後台外面）。只可改顏色與備註。</div>':'')+
+    (isNew?'<div class="pe-info">存檔後,帳號的「權限」選單就選得到這個權限。</div>':'')+
+    '<div class="pe-sec">檢視範圍</div><div class="pe-scope">'+
+      [['all','全公司','所有工地的資料都看得到'],['own','自己負責的工地','依〈工地資料〉的工地主管／工地負責人']].map(function(x){
+        return '<label><input type="radio" name="pe_scope" value="'+x[0]+'"'+(r.scope===x[0]?' checked':'')+dis(lockAll)+'><span>'+x[1]+'<small>'+x[2]+'</small></span></label>'; }).join('')+'</div>'+
+    '<div class="pe-sec">頁面權限 <span class="hint">不開放＝側邊欄看不到這一頁</span></div><div class="tblwrap"><table class="pe-ptbl">'+rows+'</table></div>'+
+    '<div class="pe-sec">可簽核</div><div class="pe-checks">'+checks+'</div>'+
+    '<div class="field" style="margin-top:14px"><label for="pe_note">備註</label><textarea id="pe_note" class="pe-note" rows="2" placeholder="選填"'+dis(readOnly)+'>'+esc(r.note||'')+'</textarea></div>'+
+    '<div class="acts"><span class="pe-err" id="peErr"></span>'+(readOnly?'<button class="btn" onclick="closeModal()">關閉</button>'
+      :'<button class="btn" onclick="closeModal()">取消</button><button class="btn ap" id="peOk">儲存</button>')+'</div>';
+  $('modalHost').innerHTML='<div class="modal"><div class="box wide" role="dialog" aria-modal="true">'+h+'</div></div>';
+  if(isNew) $('pe_copy').onchange=function(){
+    var src=(PERMS||[]).filter(function(x){ return x.name===this.value; },this)[0]; if(!src) return;
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="pe_scope"]'),function(el){ el.checked=(el.value===src.scope); });
+    permPages().forEach(function(p){ Array.prototype.forEach.call(document.querySelectorAll('input[name="pe_pg_'+p.k+'"]'),function(el){ el.checked=(el.value===((src.pages||{})[p.k]||'none')); }); });
+    ['own','proxy','revoke'].forEach(function(k){ $('pe_'+k).checked=!!(src.sign||{})[k]; });
+  };
+  if(!readOnly){ $('peOk').onclick=function(){ savePerm(idx); }; if(!r.builtin) $('pe_name').focus(); }
+}
+function savePerm(idx){
+  var isNew=(idx==null), old=isNew?null:PERMS[idx];
+  var name=(old&&old.builtin)?old.name:$('pe_name').value.trim();
+  if(!name){ peErr('請填寫權限名稱'); $('pe_name').focus(); return; }
+  var pages={}; permPages().forEach(function(p){ pages[p.k]=peRadio('pe_pg_'+p.k)||'none'; });
+  if(!(old&&old.locked)&&!permPages().some(function(p){ return pages[p.k]!=='none'; })){ peErr('至少要開放一個頁面,否則登入後什麼都看不到'); return; }
+  var perm={ name:name, tone:peRadio('pe_tone')||'mut', scope:peRadio('pe_scope')||'own', pages:pages,
+    sign:{ own:$('pe_own').checked, proxy:$('pe_proxy').checked, revoke:$('pe_revoke').checked }, note:$('pe_note').value };
+  var btn=$('peOk'); btn.disabled=true; btn.textContent='儲存中…'; peErr('');
+  api('admin_savePerm',{origName:old?old.name:'',perm:perm}).then(function(j){
+    if(!j.ok){ btn.disabled=false; btn.textContent='儲存'; peErr(j.msg||'儲存失敗'); return; }
+    closeModal();
+    toast((isNew?'已新增權限「':'已儲存「')+j.name+'」'+(j.moved?('（'+j.moved+' 個帳號一併改名）'):''));
+    if(old&&old.name===ME.role) refreshPerm();       // 改到自己的權限 → 側邊欄跟著更新
+    if(j.moved) baseScreen('acct'); else loadPerms();
+  });
+}
+function delPerm(idx){
+  var r=PERMS[idx]; if(!r||r.builtin) return;
+  if(r.used){ alert('還有 '+r.used+' 個帳號使用「'+r.name+'」,請先把這些帳號改成其他權限再刪除。'); return; }
+  if(!confirm('確定刪除權限「'+r.name+'」?')) return;
+  busyOn('刪除中…');
+  api('admin_deletePerm',{name:r.name}).then(function(j){ busyOff();
+    if(!j.ok){ toast(j.msg||'刪除失敗',true); return; }
+    toast('已刪除「'+r.name+'」'); loadPerms(); });
 }
 
 /* ===================== 報表匯出（出勤作業）===================== */
