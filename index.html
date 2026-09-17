@@ -312,7 +312,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-17-noappr-01";
+  var APP_VERSION = "2026-09-17-noappr-03";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -942,12 +942,6 @@
 
   /* ===== 調休申請 ===== */
   var tfState = { year: 0, month: 0, roster: {}, origAM: '', origPM: '' };
-  var TF_LV_OPTS = ['例假', '特休', '病假', '事假', '其他'];
-  function tfLvOptions() {
-    var h = '<option value="">不調</option>';
-    TF_LV_OPTS.forEach(function (o) { h += '<option value="' + o + '">' + o + '</option>'; });
-    return h;
-  }
   function startTransfer() {
     var d = new Date();
     tfState.year = d.getFullYear(); tfState.month = d.getMonth() + 1;
@@ -957,10 +951,8 @@
       '<label class="lbl">原定休假日（僅顯示已排休）</label><select id="tfOrigDay" class="fld"><option value="">載入中…</option></select>' +
       '<div class="gps ok" id="tfOrigInfo" style="display:none"></div>' +
       '<label class="lbl">欲調休日期</label><input type="date" id="tfNewDate" class="fld">' +
-      '<label class="lbl">欲調假別</label>' +
-      '<div class="two"><div><span class="mini">上午</span><select id="tfNewAM" class="fld">' + tfLvOptions() + '</select></div>' +
-      '<div><span class="mini">下午</span><select id="tfNewPM" class="fld">' + tfLvOptions() + '</select></div></div>' +
-      '<label class="lbl">調休理由（選填）</label><input id="tfReason" class="fld" placeholder="例：家中臨時有事">' +
+      '<label class="lbl">欲調假別（與原定休假日相同）</label><div class="gps" id="tfNewLv">選好原定休假日後自動帶入</div>' +
+      '<label class="lbl">調休理由（必填）</label><input id="tfReason" class="fld" placeholder="例：家中臨時有事">' +
       '<button class="primary" id="tfBtn" disabled>送出調休申請</button>' +
       '<div class="result" id="result"></div></div>' + tabBar('transfer');
     document.getElementById('tfYm').value = tfState.year + '-' + ('0' + tfState.month).slice(-2);
@@ -1001,14 +993,16 @@
     var info = document.getElementById('tfOrigInfo');
     var btn = document.getElementById('tfBtn');
     if (!day || !tfState.roster[day]) {
-      tfState.origAM = ''; tfState.origPM = ''; info.style.display = 'none'; btn.disabled = true; return;
+      tfState.origAM = ''; tfState.origPM = ''; info.style.display = 'none'; btn.disabled = true;
+      var nl0 = document.getElementById('tfNewLv'); nl0.className = 'gps'; nl0.textContent = '選好原定休假日後自動帶入';
+      return;
     }
     var lv = tfState.roster[day];
     tfState.origAM = lv.am || ''; tfState.origPM = lv.pm || '';
     info.style.display = 'block';
     info.textContent = '原定假別：上午 ' + (tfState.origAM || '—') + '　下午 ' + (tfState.origPM || '—');
-    document.getElementById('tfNewAM').value = tfState.origAM || '';
-    document.getElementById('tfNewPM').value = tfState.origPM || '';
+    var nl = document.getElementById('tfNewLv');                  // 欲調假別＝原定假別,不能改
+    nl.className = 'gps ok'; nl.textContent = '上午 ' + (tfState.origAM || '—') + '　下午 ' + (tfState.origPM || '—');
     btn.disabled = false;
   }
   function submitTransfer() {
@@ -1016,10 +1010,9 @@
     if (!day) { alert('請選原定休假日'); return; }
     var newDate = document.getElementById('tfNewDate').value;
     if (!newDate) { alert('請選欲調休日期'); return; }
-    var newAM = document.getElementById('tfNewAM').value;
-    var newPM = document.getElementById('tfNewPM').value;
-    if (!newAM && !newPM) { alert('請至少設定欲調休日的上午或下午假別'); return; }
+    var newAM = tfState.origAM, newPM = tfState.origPM;            // 欲調假別＝原定假別
     var reason = document.getElementById('tfReason').value.trim();
+    if (!reason) { alert('請填寫調休理由'); document.getElementById('tfReason').focus(); return; }
     var origDate = tfState.year + '/' + ('0' + tfState.month).slice(-2) + '/' + ('0' + day).slice(-2);
     var btn = document.getElementById('tfBtn');
     bBusy(btn, '送出中…'); ovBusy('調休申請送出中…請稍候');
