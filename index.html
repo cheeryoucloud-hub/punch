@@ -312,7 +312,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-17-noappr-03";
+  var APP_VERSION = "2026-09-17-noappr-04";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -633,6 +633,7 @@
     }).catch(function () {});
     loadViewEmps(function () {                                  // 人資/管理員才會拿到名單
       var vb = document.getElementById('scViewAs'); if (vb) vb.innerHTML = viewAsBar('');
+      if (document.getElementById('tfViewAs')) tfRenderWho();
       if (IS_ADMIN && (P.view === 'overview' || P.view === 'admin')) startOverview();
     });
   }).catch(function (e) {
@@ -941,11 +942,11 @@
   }
 
   /* ===== 調休申請 ===== */
-  var tfState = { year: 0, month: 0, roster: {}, origAM: '', origPM: '' };
+  var tfState = { year: 0, month: 0, roster: {}, origAM: '', origPM: '', name: '', viewing: '' };
   function startTransfer() {
     var d = new Date();
     tfState.year = d.getFullYear(); tfState.month = d.getMonth() + 1;
-    document.getElementById('wrap').innerHTML = '<div class="hdr"><h1>調休申請</h1><p>原定休假日依班表自動帶入</p></div>' +
+    document.getElementById('wrap').innerHTML = '<div class="hdr"><h1>調休申請</h1><p id="tfWho">原定休假日依班表自動帶入</p></div><div id="tfViewAs"></div>' +
       '<div class="pbody">' +
       '<label class="lbl">原定休假月份</label><input type="month" id="tfYm" class="fld">' +
       '<label class="lbl">原定休假日（僅顯示已排休）</label><select id="tfOrigDay" class="fld"><option value="">載入中…</option></select>' +
@@ -954,6 +955,7 @@
       '<label class="lbl">欲調假別（與原定休假日相同）</label><div class="gps" id="tfNewLv">選好原定休假日後自動帶入</div>' +
       '<label class="lbl">調休理由（必填）</label><input id="tfReason" class="fld" placeholder="例：家中臨時有事">' +
       '<button class="primary" id="tfBtn" disabled>送出調休申請</button>' +
+      '<div class="miniwarn" id="tfRo" style="display:none"></div>' +
       '<div class="result" id="result"></div></div>' + tabBar('transfer');
     document.getElementById('tfYm').value = tfState.year + '-' + ('0' + tfState.month).slice(-2);
     document.getElementById('tfYm').onchange = function () {
@@ -968,9 +970,10 @@
     sel.innerHTML = '<option value="">載入中…</option>';
     document.getElementById('tfOrigInfo').style.display = 'none';
     document.getElementById('tfBtn').disabled = true;
-    post({ action: 'myRoster', idToken: me.idToken, year: tfState.year, month: tfState.month })
+    post({ action: 'myRoster', idToken: me.idToken, year: tfState.year, month: tfState.month, viewAs: VIEW_AS })
       .then(function (res) {
         if (!res || !res.ok) { sel.innerHTML = '<option value="">' + esc((res && res.msg) || '讀取失敗') + '</option>'; return; }
+        tfState.name = res.name || ''; tfState.viewing = res.viewing || ''; tfRenderWho();
         tfState.roster = res.leaves || {};
         var wk = ['日', '一', '二', '三', '四', '五', '六'];
         var days = Object.keys(tfState.roster).map(Number).sort(function (a, b) { return a - b; });
@@ -987,6 +990,16 @@
         sel.innerHTML = h;
       })
       .catch(function () { sel.innerHTML = '<option value="">讀取失敗</option>'; });
+  }
+  /* 管理員／人資可切換他人視角（同概覽,唯讀）：看得到對方已排的休假,但不能替他送出 */
+  function tfRenderWho() {
+    var vb = document.getElementById('tfViewAs'); if (vb) vb.innerHTML = viewAsBar(tfState.name);
+    var who = document.getElementById('tfWho');
+    if (who) who.innerHTML = tfState.viewing ? ('以 <b>' + esc(tfState.viewing) + '</b> 的視角檢視（唯讀）') : '原定休假日依班表自動帶入';
+    var ro = document.getElementById('tfRo'), btn = document.getElementById('tfBtn');
+    if (ro) { ro.style.display = tfState.viewing ? 'block' : 'none';
+      ro.textContent = '目前是 ' + tfState.viewing + ' 的視角，只能查看，不能替他送出；要代為申請請到後台「調休申請」。'; }
+    if (btn) btn.style.display = tfState.viewing ? 'none' : '';
   }
   function onOrigDayChange() {
     var day = Number(document.getElementById('tfOrigDay').value);
@@ -1006,6 +1019,7 @@
     btn.disabled = false;
   }
   function submitTransfer() {
+    if (tfState.viewing) { alert('目前是 ' + tfState.viewing + ' 的視角，不能替他送出'); return; }
     var day = Number(document.getElementById('tfOrigDay').value);
     if (!day) { alert('請選原定休假日'); return; }
     var newDate = document.getElementById('tfNewDate').value;
@@ -1168,7 +1182,7 @@
   var VIEW_AS = '', VIEW_EMPS = null, IS_ADMIN = false;
   try { VIEW_AS = sessionStorage.getItem('qy_viewas') || ''; } catch (e) { }
   function setViewAs(v) { VIEW_AS = v || ''; try { v ? sessionStorage.setItem('qy_viewas', v) : sessionStorage.removeItem('qy_viewas'); } catch (e) { }
-    if (P.view === 'schedule') loadSchedule(); else startOverview(); }
+    if (P.view === 'schedule') loadSchedule(); else if (P.view === 'transfer') startTransfer(); else startOverview(); }
   var B_Q = '\'\'';   // 產生 onclick 內的 '' 
   function viewAsBar(curName) {
     if (!IS_ADMIN) return '';
