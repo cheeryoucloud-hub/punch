@@ -510,7 +510,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-04-keyin-01";
+  var APP_VERSION = "2026-09-17-noappr-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -599,7 +599,7 @@ var I={
 };
 var NAV=[
   {k:'notice',t:'公司公告',g:'人資管理'},{k:'remind',t:'LINE提醒',g:'人資管理'},
-  {k:'overview',t:'總覽',g:'打卡作業'},{k:'punch',t:'打卡申請',g:'打卡作業'},{k:'punchlog',t:'打卡明細',g:'打卡作業'},
+  {k:'overview',t:'總覽',g:'打卡作業'},{k:'punchlog',t:'打卡明細',g:'打卡作業'},
   {k:'leave',t:'休假登錄',g:'出勤作業'},{k:'transfer',t:'調休申請',g:'出勤作業'},
   {k:'roster',t:'輪休表',g:'出勤作業'},{k:'report',t:'出勤表',g:'出勤作業'},{k:'export',t:'報表匯出',g:'出勤作業'},
   {k:'emp',t:'員工名冊',g:'基本資料'},{k:'site',t:'工地資料',g:'基本資料'},
@@ -608,7 +608,7 @@ var NAV=[
 ];
 /* ===================== 權限（帳號權限頁由管理員設定;登入時伺服器帶回 ME.perm）===================== */
 var PERM_LV_TEXT={none:'不開放',view:'檢視',period:'期別內可填',edit:'編輯',export:'可匯出',run:'可執行'};
-var PERM_PAGE_LV={notice:['none','view','edit'],remind:['none','view','edit'],overview:['none','view'],punch:['none','view'],
+var PERM_PAGE_LV={notice:['none','view','edit'],remind:['none','view','edit'],overview:['none','view'],
   punchlog:['none','view','edit'],leave:['none','view','period','edit'],transfer:['none','view'],roster:['none','view','edit'],
   report:['none','view','edit'],export:['none','export'],emp:['none','view','edit'],site:['none','view','edit'],
   geo:['none','view','edit'],acct:['none','view','edit'],maint:['none','run']};
@@ -619,8 +619,8 @@ function defaultPerm(role){
   var all={}; Object.keys(PERM_PAGE_LV).forEach(function(k){ var l=PERM_PAGE_LV[k]; all[k]=l[l.length-1]; });
   if(role==='管理員') return {name:role,tone:'bad',scope:'all',pages:all,sign:{own:true,proxy:true,revoke:true},builtin:true,locked:true};
   if(role==='人資'){ var hr=P(all); hr.maint='none'; return {name:role,tone:'info',scope:'all',pages:hr,sign:{own:true,proxy:true,revoke:true},builtin:true}; }
-  if(role==='主管') return {name:role,tone:'wait',scope:'own',pages:P({overview:'view',punch:'view',punchlog:'view',leave:'view',transfer:'view',roster:'view',report:'view',emp:'view',site:'view',geo:'view'}),sign:{own:true},builtin:true};
-  if(role==='工地負責人') return {name:role,tone:'mut',scope:'own',pages:P({overview:'view',punch:'view',punchlog:'view',leave:'period',transfer:'view',roster:'view'}),sign:{own:true},builtin:true};
+  if(role==='主管') return {name:role,tone:'wait',scope:'own',pages:P({overview:'view',punchlog:'view',leave:'view',transfer:'view',roster:'view',report:'view',emp:'view',site:'view',geo:'view'}),sign:{own:true},builtin:true};
+  if(role==='工地負責人') return {name:role,tone:'mut',scope:'own',pages:P({overview:'view',punchlog:'view',leave:'period',transfer:'view',roster:'view'}),sign:{own:true},builtin:true};
   return {name:role||'一般',tone:'mut',scope:'own',pages:P({overview:'view'}),sign:{own:true}};
 }
 function myPerm(){ return ME.perm||defaultPerm(ME.role); }
@@ -727,7 +727,7 @@ function rocTitle(){ return '啓宇營造工程股份有限公司　'+(yy()-1911
 
 /* ===================== 派發 ===================== */
 function render(){
-  var scr={overview:scOverview,punch:scPunch,punchlog:scPunchLog,notice:scNotice,remind:scRemind,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct,maint:scMaint,export:scExport}[state.screen];
+  var scr={overview:scOverview,punchlog:scPunchLog,notice:scNotice,remind:scRemind,leave:scLeave,transfer:scTransfer,roster:scRoster,report:scReport,emp:scEmp,site:scSite,geo:scGeo,acct:scAcct,maint:scMaint,export:scExport}[state.screen];
   if(scr) scr();
 }
 
@@ -745,6 +745,9 @@ function ovShift(n){ var c=state.ovCur||todayStr(); var p=c.split('/'); var dt=n
 function ovToday(){ state.ovDate=''; state.ovCur=''; scOverview(); }
 function ovPick(v){ if(!v)return; state.ovDate=v.replace(/-/g,'/'); scOverview(); }
 function statc(ic,svg,lab,val,unit,sub){ return '<div class="stat"><div class="ic '+ic+'">'+svg+'</div><div><div class="lab">'+lab+'</div><div class="val tnum">'+val+'<small>'+unit+'</small></div><div class="sub">'+esc(sub)+'</div></div></div>'; }
+/* 打卡時間旁邊的小標示：異常（超出範圍／無定位）、外勤、補登。打卡已不需審核,這只是讓人一眼看到 */
+function ovFlagPill(f){ if(!f)return ''; var c=(f==='外勤')?'info':((f==='補登')?'wait':'bad');
+  return '<span class="pill '+c+'" style="font-size:9.5px;margin-left:3px">'+esc(f)+'</span>'; }
 function loadOverview(){
   api('admin_overview',{date:state.ovDate}).then(function(d){
     state.ovCur=d.date||todayStr();
@@ -752,15 +755,13 @@ function loadOverview(){
     if(!d.ok){ put('ovBody','<div class="empty">'+esc(d.msg||'讀取失敗')+'</div>'); return; }
     var sites=d.sites||[]; var inC=0,outC=0,lv=0,tot=0, notIn=[], onLeave=[];
     sites.forEach(function(g){ g.people.forEach(function(pp){ tot++; if(pp.leave){lv++;onLeave.push({n:pp.name,s:g.site,lv:pp.leave});return;} if(pp.in)inC++; else notIn.push({n:pp.name,s:g.site}); if(pp.out)outC++; }); });
-    var pend=d.pendingAct||0, pPu=d.pendingPunch||0, pTf=d.pendingTf||0;
-    var pendGo=(pPu||!pTf)?'punch':'transfer';                       // 只有調休待辦時直接跳調休頁
-    var pendSub=pend?('打卡 '+pPu+' 件 · 調休 '+pTf+' 件'):'目前沒有待辦';
+    var pTf=d.pendingTf||0, canTf=PV('transfer')!=='none';            // 打卡已不需審核,待辦只剩調休簽核
     var need=Math.max(0,tot-lv); var rate=need?Math.round(inC/need*100):0;   // 打卡率不含休假人數
     var h='<div class="cards">'+
       statc('g',I.work,'應出勤 <span class="sm">需打卡</span>',tot,'人','')+
       statc('g',I.overview,'已上班',inC,'人','已下班 '+outC+' 人')+
       statc('a',I.sun,'休假',lv,'人','')+
-      '<div class="stat clickable" onclick="go(&#39;'+pendGo+'&#39;)" title="點我前往審核"><div class="ic b">'+I.transfer+'</div><div><div class="lab">待審核申請</div><div class="val tnum">'+pend+'<small>件</small></div><div class="sub">'+pendSub+'</div></div></div>'+
+      '<div class="stat'+(canTf?' clickable" onclick="go(&#39;transfer&#39;)" title="點我前往調休申請':'')+'"><div class="ic b">'+I.transfer+'</div><div><div class="lab">待簽核調休</div><div class="val tnum">'+pTf+'<small>件</small></div><div class="sub">'+(pTf?'等你簽核':'目前沒有待辦')+'</div></div></div>'+
       '<div class="stat pink"><div class="ic r">'+I.punch+'</div><div><div class="lab">尚未打卡</div><div class="val tnum">'+notIn.length+'<small>人</small></div><div class="sub">應出勤 '+need+' 人</div></div></div>'+
       '<div class="stat"><div class="donut" style="background:conic-gradient(var(--brand) 0 '+rate+'%, var(--line) '+rate+'% 100%)"><span>'+rate+'%</span></div><div><div class="lab">打卡率</div><div class="sub" style="margin-top:6px">上班 '+inC+' / '+need+' 人（不含休假）</div></div></div>'+
       '</div>';
@@ -772,8 +773,8 @@ function loadOverview(){
         g.people.forEach(function(pp){ if(pp.leave){ var la=pp.leaveAM||'', lp=pp.leavePM||'';
           if(!la&&!lp){ la=pp.leave; lp=pp.leave; }
           h+='<tr><td>'+esc(pp.name)+'</td><td class="lv">'+esc(la||'—')+'</td><td class="lv">'+esc(lp||'—')+'</td></tr>'; return; }
-          var ci=pp.in?(esc(pp.in)+(pp.inPending?'<span class="pill wait" style="font-size:9.5px;margin-left:3px">待核准</span>':'')):'—';
-          var co=pp.out?((pp.outNext?'<b title="隔天凌晨打的卡（跨日）">'+esc(pp.out)+'</b>':esc(pp.out))+(pp.outPending?'<span class="pill wait" style="font-size:9.5px;margin-left:3px">待核准</span>':'')):'—';
+          var ci=pp.in?(esc(pp.in)+ovFlagPill(pp.inFlag)):'—';
+          var co=pp.out?((pp.outNext?'<b title="隔天凌晨打的卡（跨日）">'+esc(pp.out)+'</b>':esc(pp.out))+ovFlagPill(pp.outFlag)):'—';
           h+='<tr><td>'+esc(pp.name)+'</td><td class="tnum">'+ci+'</td><td class="tnum">'+co+'</td></tr>'; });
         h+='</table></div>';
       });
@@ -875,7 +876,7 @@ function delNotice(i){
 }
 
 /* ===================== 打卡明細（原始紀錄） ===================== */
-var PLOG={site:'__all__',name:'',type:'',method:'',date:todayStr()};   // 打卡明細以「天」為單位
+var PLOG={site:'__all__',name:'',type:'',method:'',status:'',scope:'day',date:todayStr()};   // 預設看「當天」;scope='month' 看整月（配「只看異常」最好用）
 var PLOG_DATA=null, PLOG_LIST=[];
 function scPunchLog(){
   state.ym=PLOG.date.substring(0,7);            // 讓其他頁面的月份跟這天一致
@@ -884,7 +885,9 @@ function scPunchLog(){
     '<select id="plSite" onchange="plSet(\'site\',this.value)"><option value="__all__">全部工地</option></select>'+
     '<select id="plName" onchange="plSet(\'name\',this.value)"><option value="">全部人員</option></select>'+
     '<select id="plType" onchange="plSet(\'type\',this.value)">'+['','上班','下班','加班結束'].map(function(x){return '<option value="'+x+'"'+(PLOG.type===x?' selected':'')+'>'+(x||'全部類型')+'</option>';}).join('')+'</select>'+
-    '<select id="plMethod" onchange="plSet(\'method\',this.value)">'+['','定點','外勤','補打'].map(function(x){return '<option value="'+x+'"'+(PLOG.method===x?' selected':'')+'>'+(x||'全部方式')+'</option>';}).join('')+'</select>'+
+    '<select id="plMethod" onchange="plSet(\'method\',this.value)">'+['','定點','外勤','補登'].map(function(x){return '<option value="'+x+'"'+(PLOG.method===x?' selected':'')+'>'+(x||'全部方式')+'</option>';}).join('')+'</select>'+
+    '<select id="plStatus" onchange="plSet(\'status\',this.value)" title="異常＝超出範圍／無定位、外勤、人資補登、作廢"><option value="">全部狀態</option><option value="abn"'+(PLOG.status==='abn'?' selected':'')+'>只看異常</option></select>'+
+    '<select id="plScope" onchange="plScopeSet(this.value)"><option value="day"'+(PLOG.scope==='day'?' selected':'')+'>當天</option><option value="month"'+(PLOG.scope==='month'?' selected':'')+'>整月</option></select>'+
     '<span class="spacer"></span>'+
     (canEd('punchlog')?'<button class="add" onclick="addPunchRow()">＋ 新增補登</button>':'')+
     '<span class="hint" id="plCount"></span></div>'+
@@ -898,25 +901,27 @@ function plStep(){
   var d=PLOG.date, q=d.split('/'), iso=q[0]+'-'+q[1]+'-'+q[2];
   return '<div class="mstep"><button onclick="plShift(-1)">‹</button>'+
     '<span class="dp" title="點我開月曆" onclick="var i=this.querySelector(\'input\'); if(i.showPicker){try{i.showPicker();}catch(e){i.focus();}}else i.focus();">'+
-      '<span class="lb" id="plLb">📅 '+esc(d)+'（'+plWk(d)+'）</span>'+
+      '<span class="lb" id="plLb">'+esc(plLabel())+'</span>'+
       '<input type="date" id="plDate" value="'+iso+'" onchange="plSetDate(this.value)"></span>'+
     '<button onclick="plShift(1)">›</button>'+
     '<span class="now" onclick="plSetDate(todayStr())">今日</span></div>';
 }
+function plLabel(){ return PLOG.scope==='month' ? ('📅 '+PLOG.date.substring(0,7)+'（整月）') : ('📅 '+PLOG.date+'（'+plWk(PLOG.date)+'）'); }
+function plScopeSet(v){ PLOG.scope=(v==='month')?'month':'day'; var lb=$('plLb'); if(lb) lb.textContent=plLabel(); loadPunchLog(); }
 function plShift(n){
   var q=PLOG.date.split('/'), dt=new Date(+q[0],+q[1]-1,+q[2]);
-  dt.setDate(dt.getDate()+n);
+  if(PLOG.scope==='month') dt=new Date(+q[0],+q[1]-1+n,1); else dt.setDate(dt.getDate()+n);   // 整月檢視時箭頭換月
   plSetDate(dt.getFullYear()+'-'+p2(dt.getMonth()+1)+'-'+p2(dt.getDate()));
 }
 function plSetDate(v){
   PLOG.date=(v||todayStr()).replace(/-/g,'/');
   state.ym=PLOG.date.substring(0,7);                    // 其他頁面的月份跟著走
-  var lb=$('plLb'); if(lb) lb.textContent='📅 '+PLOG.date+'（'+plWk(PLOG.date)+'）';
+  var lb=$('plLb'); if(lb) lb.textContent=plLabel();
   var inp=$('plDate'); if(inp) inp.value=PLOG.date.replace(/[/]/g,'-');
   loadPunchLog();
 }
 function loadPunchLog(){
-  api('admin_punchLog',{ym:ymDash(),date:PLOG.date,site:PLOG.site,name:PLOG.name,type:PLOG.type,method:PLOG.method}).then(function(j){
+  api('admin_punchLog',{ym:ymDash(),date:(PLOG.scope==='month'?'':PLOG.date),site:PLOG.site,name:PLOG.name,type:PLOG.type,method:PLOG.method,status:PLOG.status}).then(function(j){
     var b=$('plBody'); if(!b)return;
     if(!j.ok){ b.innerHTML='<div class="panel"><div class="empty">'+esc(j.msg||'讀取失敗')+'</div></div>'; return; }
     PLOG_DATA=j; PLOG_LIST=[];
@@ -924,25 +929,25 @@ function loadPunchLog(){
     if(ss&&ss.options.length<=1) ss.innerHTML='<option value="__all__">全部工地</option>'+(j.sites||[]).map(function(x){return '<option'+(PLOG.site===x?' selected':'')+'>'+esc(x)+'</option>';}).join('');
     var sn=$('plName');
     if(sn&&sn.options.length<=1) sn.innerHTML='<option value="">全部人員</option>'+(j.names||[]).map(function(x){return '<option'+(PLOG.name===x?' selected':'')+'>'+esc(x)+'</option>';}).join('');
-    if($('plCount')) $('plCount').textContent='共 '+j.total+' 筆';
-    if(!j.days.length){ b.innerHTML='<div class="panel"><div class="empty">這一天沒有符合條件的打卡紀錄</div></div>'; return; }
+    if($('plCount')) $('plCount').textContent='共 '+j.total+' 筆'+(j.monthAbn?('　·　本月異常 '+j.monthAbn+' 筆'):'');
+    if(!j.days.length){ b.innerHTML='<div class="panel"><div class="empty">'+(PLOG.scope==='month'?'這個月':'這一天')+'沒有符合條件的打卡紀錄</div></div>'; return; }
     var h='';
     j.days.forEach(function(dy){
       h+='<div class="panel daygrp">'+
+        (PLOG.scope==='month'?('<div class="dayhd"><b>'+esc(dy.date)+'</b><span>（'+esc(dy.wk)+'）</span><i>'+dy.items.length+' 筆</i></div>'):'')+
         '<div class="tblwrap"><table class="tbl"><thead><tr><th style="width:62px">時間</th><th style="width:84px">姓名</th><th style="width:92px">工地</th>'+
         '<th style="width:74px">類型</th><th style="width:74px">方式</th><th>地點／定位</th><th>備註</th><th style="width:78px">狀態</th>'+
         (j.canEdit?'<th class="r" style="width:108px">操作</th>':'')+'</tr></thead><tbody>';
       dy.items.forEach(function(r){
         var i=PLOG_LIST.length; PLOG_LIST.push(r);
-        var mcls=(r.method==='外勤')?'info':((r.method==='補打')?'wait':'mut');
+        var mcls=(r.method==='外勤')?'info':((r.method==='補登'||r.method==='補打')?'wait':'mut');
         var loc=esc(r.place||'—');
         if(r.geo==='超出範圍'||r.geo==='無定位') loc+=' <span class="pill bad" style="font-size:10px">'+esc(r.geo)+(r.dist?('・'+esc(r.dist)+'m'):'')+'</span>';
         if(r.lat&&r.lng) loc+=' <a class="maplink" href="javascript:void(0)" onclick="openLogMap('+i+')">📍</a>';
-        var st=(r.status==='正常'||r.status==='已核准')?'<span class="pill ok">'+esc(r.status)+'</span>'
-              :(r.status==='已退回')?'<span class="pill bad">已退回</span>':'<span class="pill wait">'+esc(r.status||'—')+'</span>';
+        var st=plStatusPill(r.status);
         var note=esc(r.note||'—');
         if(r.editor) note+='<div class="edited" title="'+esc(r.editReason||'')+'">✎ '+esc(r.editor)+' 於 '+esc(r.editAt)+' 修改</div>';
-        h+='<tr><td class="tnum">'+esc(r.time)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td>'+
+        h+='<tr'+(r.isVoid?' style="opacity:.5" title="已作廢,不計入出勤"':'')+'><td class="tnum">'+esc(r.time)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td>'+
           '<td>'+esc(r.type)+'</td><td><span class="pill '+mcls+'">'+esc(r.method)+'</span></td>'+
           '<td class="muted" style="font-size:12px">'+loc+'</td><td class="muted">'+note+'</td><td>'+st+'</td>'+
           (j.canEdit?('<td class="r"><div class="actions"><button class="btn sm" onclick="editPunchRow('+i+')">編輯</button><button class="btn rj sm" onclick="delPunchRow('+i+')">刪</button></div></td>'):'')+
@@ -953,7 +958,11 @@ function loadPunchLog(){
     b.innerHTML=h;
   });
 }
-/* 手動補登：LINE 打不了卡時,人資依 LINE 對話紀錄 KEY 單 */
+/* 狀態標籤：正常／已核准(舊)＝綠、異常／待核准(舊)＝紅、外勤＝藍、補登＝橘、作廢／已退回(舊)＝灰。打卡已不需審核,狀態只是描述這筆卡 */
+function plStatusPill(s){ s=String(s||'');
+  var c=(s==='正常'||s==='已核准')?'ok':((s==='異常'||s==='待核准')?'bad':((s==='外勤')?'info':((s==='補登')?'wait':'mut')));
+  return '<span class="pill '+c+'">'+esc(s||'—')+'</span>'; }
+/* 手動補登：LINE 打不了卡、或員工忘記打卡時,人資依 LINE 對話紀錄 KEY 單（員工端的補打卡申請已取消,這是唯一的補登管道）*/
 function addPunchRow(){
   getEmps(false,function(list){
     if(!list){ toast('員工名單載入失敗',true); return; }
@@ -966,7 +975,7 @@ function addPunchRow(){
       '<div class="field"><label>時間</label><input type="time" id="kTime"></div></div>'+
       '<div class="field"><label>補登依據（必填）</label><input id="kBasis" placeholder="例：LINE 對話 9/4 08:02 回報打卡頁打不開"></div>'+
       '<div class="field"><label>備註（選填）</label><input id="kNote" placeholder="例：晚到原因、外勤說明"></div>'+
-      '<div class="hint">將以「方式＝補打、狀態＝已核准」寫入,核准人記你的名字,備註保留補登依據以備查。</div>',
+      '<div class="hint">將以「方式＝補登、狀態＝補登」寫入並直接生效,裝置欄記你的名字,備註保留補登依據以備查。</div>',
       function(){
         var emp=$('kEmp').value, dt=$('kDate').value, tm=$('kTime').value, basis=($('kBasis').value||'').trim();
         if(!emp){ toast('請選擇員工',true); return; }
@@ -988,6 +997,8 @@ function openLogMap(i){
     '<div class="hint" style="margin-bottom:9px">地點：'+esc(r.place||'—')+(r.geo?('　定位結果：'+esc(r.geo)):'')+'</div>'+
     punchMapHtml(r), function(){ closeModal(); });
 }
+/* 舊資料的值（補打／待核准／已核准／已退回）不在新清單裡,開啟編輯時補進選項,避免一打開就被改掉 */
+function withCur(list,cur){ cur=String(cur==null?'':cur); return (cur&&list.indexOf(cur)<0)?list.concat([cur]):list; }
 function selOpts(list,cur){ return list.map(function(x){ return '<option'+(String(cur)===x?' selected':'')+'>'+esc(x)+'</option>'; }).join(''); }
 function editPunchRow(i){
   var r=PLOG_LIST[i]; if(!r)return;
@@ -995,13 +1006,13 @@ function editPunchRow(i){
     '<div class="row2"><div class="field"><label>打卡時間（yyyy/MM/dd HH:mm）</label><input id="eDt" value="'+esc(r.dt)+'"></div>'+
     '<div class="field"><label>類型</label><select id="eType" onchange="ePunchTypeHint(\''+esc(r.type)+'\')">'+selOpts(['上班','下班','加班開始','加班結束'],r.type)+'</select></div></div>'+
     '<div class="hint" id="eOtHint" style="display:none;margin:-4px 0 10px;padding:8px 10px;border-radius:9px;background:var(--brand-soft);color:var(--brand-ink)">改成「加班結束」後，若當天沒有其他下班卡，系統會<b>自動補一筆同時間的下班</b>（備註標記「加班結束一併登記下班」）。出勤表會同時顯示下班與加班時間，備註請填加班原因。</div>'+
-    '<div class="row2"><div class="field"><label>方式</label><select id="eMethod">'+selOpts(['定點','外勤','補打'],r.method)+'</select></div>'+
-    '<div class="field"><label>定位結果</label><select id="eGeo">'+selOpts(['正常','超出範圍','無定位','外勤','補打'],r.geo)+'</select></div></div>'+
+    '<div class="row2"><div class="field"><label>方式</label><select id="eMethod">'+selOpts(withCur(['定點','外勤','補登'],r.method),r.method)+'</select></div>'+
+    '<div class="field"><label>定位結果</label><select id="eGeo">'+selOpts(withCur(['正常','超出範圍','無定位','外勤','補登'],r.geo),r.geo)+'</select></div></div>'+
     '<div class="row2"><div class="field"><label>打卡地點</label><input id="ePlace" value="'+esc(r.place)+'"></div>'+
-    '<div class="field"><label>狀態</label><select id="eStatus">'+selOpts(['正常','待核准','已核准','已退回'],r.status)+'</select></div></div>'+
+    '<div class="field"><label>狀態</label><select id="eStatus">'+selOpts(withCur(['正常','異常','外勤','補登','作廢'],r.status),r.status)+'</select></div></div>'+
     '<div class="field"><label id="eNoteLab">備註</label><input id="eNote" value="'+esc(r.note)+'"></div>'+
     '<div class="field"><label>修改原因（必填）</label><input id="eReason" placeholder="例：員工反映時間有誤，經主管確認後更正"></div>'+
-    '<div class="hint">出勤紀錄依法須據實記載。系統會記錄<b>修改人、修改時間、修改前原值</b>以備查。</div>',
+    '<div class="hint">狀態選「作廢」＝這筆不計入出勤（紀錄仍保留,不用刪）。出勤紀錄依法須據實記載。系統會記錄<b>修改人、修改時間、修改前原值</b>以備查。</div>',
     function(){
       var reason=($('eReason').value||'').trim();
       if(!reason){ toast('請填寫修改原因',true); return; }
@@ -1036,64 +1047,6 @@ function delPunchRow(i){
     });
 }
 
-/* ===================== 打卡申請 ===================== */
-var PK_FILTER=''; var PK_METHOD=''; var PK_LIST=[];
-function scPunch(){
-  $('main').innerHTML=pageTop('打卡申請',false)+
-    '<div class="toolbar">'+mstep()+
-    '<select id="pkMethod" onchange="pkMethodSet(this.value)" style="min-width:130px">'+
-      ['','補打','外勤','定位異常'].map(function(m){ return '<option value="'+esc(m)+'"'+(PK_METHOD===m?' selected':'')+'>'+(m||'全部方式')+'</option>'; }).join('')+
-    '</select>'+
-    '<span class="tfstat" id="pkStat"></span><span class="spacer"></span>'+
-    '<span class="hint">補打／外勤／定位異常,以月為單位</span></div>'+
-    '<div class="panel"><div class="tblwrap" id="pkBody"><div class="spin">載入中…</div></div></div>';
-  loadPunch();
-}
-function pkFilterSet(v){ PK_FILTER=v; loadPunch(); }
-function pkMethodSet(v){ PK_METHOD=v; loadPunch(); }
-/* 定位異常：點一下用 Google 地圖看員工實際打卡的位置 */
-function pkMapLink(r,i){
-  var la=Number(r.lat), ln=Number(r.lng);
-  if(!isFinite(la)||!isFinite(ln)||(!la&&!ln)) return '';
-  return ' <a class="maplink" href="javascript:void(0)" onclick="openPunchMap('+i+')" title="開啟地圖,含容許範圍圓圈">📍 查看位置</a>';
-}
-function loadPunch(){
-  api('admin_punchList',{ym:ymDash()}).then(function(j){
-    var b=$('pkBody'); if(!b)return;
-    if(!j.ok){ b.innerHTML='<div class="empty">'+esc(j.msg||'讀取失敗')+'</div>'; return; }
-    PK_LIST=j.list||[];
-    var all=PK_LIST.filter(function(r){ return !PK_METHOD||r.method===PK_METHOD; });   // 先套方式篩選
-    var nWait=all.filter(function(r){return r.status==='待核准';}).length;
-    var nOk=all.filter(function(r){return r.status==='已核准'||r.status==='正常';}).length;
-    var nNo=all.filter(function(r){return r.status==='已退回';}).length;
-    var st=$('pkStat');
-    if(st) st.innerHTML='<span class="tc'+(PK_FILTER===''?' on':'')+'" onclick="pkFilterSet(\'\')">全部<span class="num">'+all.length+'</span></span>'+
-      '<span class="tc'+(PK_FILTER==='待核准'?' on':'')+'" onclick="pkFilterSet(\'待核准\')" style="color:var(--amber)">待審核<span class="num">'+nWait+'</span></span>'+
-      '<span class="tc'+(PK_FILTER==='已核准'?' on':'')+'" onclick="pkFilterSet(\'已核准\')" style="color:var(--ok)">已核准<span class="num">'+nOk+'</span></span>'+
-      '<span class="tc'+(PK_FILTER==='已退回'?' on':'')+'" onclick="pkFilterSet(\'已退回\')" style="color:var(--danger)">已退回<span class="num">'+nNo+'</span></span>';
-    var list=all.filter(function(r){ if(!PK_FILTER)return true;
-      if(PK_FILTER==='已核准')return r.status==='已核准'||r.status==='正常';
-      return r.status===PK_FILTER; });
-    if(!list.length){ b.innerHTML='<div class="empty">本月沒有符合條件的打卡申請</div>'; return; }
-    // 地點／定位固定寬(內容可換行),核准人不換行;備註吃剩下的寬度
-    var h='<table class="tbl"><thead><tr><th>姓名</th><th>工地</th><th>類型</th><th>方式</th><th style="width:96px">日期時間</th><th style="width:190px">地點／定位</th><th>備註</th><th style="width:78px">狀態</th><th style="width:72px">核准人</th><th class="r" style="width:118px">審核</th></tr></thead><tbody>';
-    list.forEach(function(r){
-      var st2=(r.status==='已核准')?'<span class="pill ok">已核准</span>'
-             :(r.status==='正常')?'<span class="pill ok">正常</span>'
-             :(r.status==='已退回')?'<span class="pill bad">已退回</span>':'<span class="pill wait">待核准</span>';
-      var mcls=(r.method==='外勤')?'info':((r.method==='定位異常')?'bad':'mut');
-      var loc=esc(r.place||'—');
-      if(r.geo==='超出範圍'||r.geo==='無定位') loc+=' <span class="pill bad" style="font-size:10px">'+esc(r.geo)+(r.dist?('・'+esc(r.dist)+'m'):'')+'</span>';
-      if(r.method==='定位異常'||r.method==='外勤') loc+=pkMapLink(r,PK_LIST.indexOf(r));
-      var act=r.canAct?'<div class="actions"><button class="btn ap sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'approve\')">核准</button><button class="btn rj sm" onclick="actPunch(\''+esc(r.recordId)+'\',\'reject\')">退回</button></div>':'<span class="hint">—</span>';
-      h+='<tr><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.site||'—')+'</td><td>'+esc(r.type)+'</td>'+
-        '<td><span class="pill '+mcls+'">'+esc(r.method)+'</span></td><td class="tnum">'+esc(r.dt)+'</td>'+
-        '<td class="muted" style="font-size:12px">'+loc+'</td><td class="muted">'+esc(r.reason||'—')+'</td>'+
-        '<td>'+st2+'</td><td style="white-space:nowrap">'+esc(r.appr||'—')+'</td><td class="r">'+act+'</td></tr>';
-    });
-    b.innerHTML=h+'</tbody></table>';
-  });
-}
 /* ===================== 打卡位置小地圖（OSM 圖磚 + SVG 疊圖,不依賴外部函式庫）===================== */
 var MAP_W=560, MAP_H=380, TILE=256;
 function mercX(lng,z){ return (lng+180)/360*Math.pow(2,z)*TILE; }
@@ -1160,15 +1113,6 @@ function geoDist(la1,ln1,la2,ln2){
   var a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*tr)*Math.cos(la2*tr)*Math.sin(dLn/2)*Math.sin(dLn/2);
   return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
-function openPunchMap(i){
-  var r=(PK_LIST||[])[i]; if(!r)return;
-  modal('打卡位置 · '+r.name+'（'+r.dt+'）',
-    '<div class="hint" style="margin-bottom:9px">地點：'+esc(r.place||'—')+(r.geo?('　定位結果：'+esc(r.geo)):'')+'</div>'+
-    punchMapHtml(r), function(){ closeModal(); });
-}
-function actPunch(id,dec){ if(dec==='reject'&&!confirm('確定退回此申請?'))return; busyOn('處理中…'); api('admin_approve',{recordId:id,decision:dec}).then(function(j){ busyOff(); if(!j.ok){toast(j.msg||'操作失敗',true);}else{toast(dec==='approve'?'已核准':'已退回');} loadPunch(); }); }
-
-
 /* ===================== LINE 提醒 ===================== */
 var RMD=null;
 /** 依「發送對象」決定卡片標題/顏色/按鈕（與後端 _remindFlex 一致）*/
@@ -1198,11 +1142,11 @@ function rmdSummaryHtml(target,text,time,ic,tt,col,showBtn){
     return '<div class="sms"><div class="smt"><b>'+title+'</b><span class="smn" style="background:'+color+'">'+n+' '+unit+'</span></div><div class="smh">'+hint+'</div>'+
       rows.map(function(r){ return '<div class="sml"><span class="s" style="color:'+color+'">'+esc(r[0])+'</span><span class="v">'+esc(r[1])+(r[2]?'<small>'+esc(r[2])+'</small>':'')+'</span>'+(r[3]?'<span class="t'+(r[4]?' w':'')+'">'+esc(r[3])+'</span>':'')+'</div>'; }).join('')+'</div>';
   }
-  var body=sec('今日未打上班卡人員','請提醒他們補打卡。','#2f6bd8',3,'人',[['寶田','謝舒婷、李聰柔'],['先麥','黃茂軒']])+
+  var body=sec('今日未打上班卡人員','請提醒他們打卡;忘記打卡請聯絡人資補登。','#2f6bd8',3,'人',[['寶田','謝舒婷、李聰柔'],['先麥','黃茂軒']])+
     sec('今日未打下班卡人員','請提醒他們完成下班打卡。','#E29A2E',3,'人',[['寶田','王小明'],['義成','賴聿哲、蘇博建']])+
-    sec(isAdm?'今日尚有未核准之申請':'今日您尚有未核准之申請','請至出勤概覽進行簽核。','#7C5CD6',4,'件',
-      isAdm?[['寶田','謝舒婷','','補打卡'],['寶田','李聰柔','主管已簽，缺負責人','調休'],['先麥','黃茂軒','負責人已簽，缺主管','調休'],['義成','賴聿哲','','定位異常',true]]
-           :[['寶田','謝舒婷','','補打卡'],['寶田','李聰柔','主管已簽，待您簽核','調休'],['先麥','黃茂軒','','外勤打卡'],['義成','賴聿哲','','定位異常',true]]);
+    sec(isAdm?'今日尚有未簽核之調休':'今日您尚有未簽核之調休','請至出勤概覽進行簽核。','#7C5CD6',2,'件',
+      isAdm?[['寶田','李聰柔','主管已簽，缺負責人','調休'],['義成','賴聿哲','負責人、主管都未簽','調休']]
+           :[['寶田','李聰柔','主管已簽，待您簽核','調休'],['義成','賴聿哲','','調休']]);
   var t=(text||'').trim();
   if(t) body+='<div class="sp2" style="margin:9px 0"></div><div class="tx" style="font-size:11px;color:#888">'+esc(t)+'</div>';
   var d=new Date(), wk=['日','一','二','三','四','五','六'], hm=(String(time||'').match(/(\d{1,2}:\d{2})/)||[])[1]||'';
@@ -1508,7 +1452,7 @@ function editRemind(i){
     if($('rIcon')) $('rIcon').placeholder=rmdPreset(this.value).icon;
     var isSum=!!rmdPreset(this.value).summary;                      // 每日總結：內容自動產生,文字框改成選填的補充說明
     if($('rTextLab')) $('rTextLab').textContent=isSum?'補充說明（選填,顯示在卡片最下方）':'提醒事項（LINE 卡片內容）';
-    if($('rText')) $('rText').placeholder=isSum?'例：忘記打卡請用「補打卡」提出申請':'';
+    if($('rText')) $('rText').placeholder=isSum?'例：忘記打卡請聯絡人資補登':'';
     rmdColorBar(RMD_CUR_COLOR,this.value); rmdLivePrev(); };
   rmdSyncPick();
   RMD_CUR_COLOR=r.color||'';
@@ -2278,7 +2222,7 @@ function openGeoMap(la,ln,rd,name){
   modal('打卡範圍 · '+name,
     '<div class="hint" style="margin-bottom:9px">容許半徑 <b>'+rd+'</b> 公尺　·　座標 '+la.toFixed(6)+', '+ln.toFixed(6)+'</div>'+
     punchMapHtml({ geoLat:la, geoLng:ln, radius:rd, lat:'', lng:'' }, { pad:4.2 })+   /* 看得到更多周邊 */
-    '<div class="hint" style="margin-top:8px">綠色圈內打卡才算正常;圈外會被標記為定位異常,需負責人核准。</div>',
+    '<div class="hint" style="margin-top:8px">綠色圈內打卡才算正常;圈外照樣會記錄,但會標示為「異常」,後台「打卡明細 → 只看異常」查得到。</div>',
     function(){ closeModal(); });
 }
 function pillStat(v){ v=String(v); if(v==='在職')return '<span class="pill ok">在職</span>'; if(v==='離職')return '<span class="pill mut">離職</span>'; if(v==='啟用')return '<span class="pill ok">啟用</span>'; if(v==='停用')return '<span class="pill mut">停用</span>'; return esc(v); }
@@ -2452,7 +2396,7 @@ function editPerm(idx,readOnly){
       }).join('')+'</div>'+(p.k==='acct'?' <span class="hint">「各權限可做的事」固定只有管理員可改</span>':'')+'</td></tr>';
     });
   });
-  var checks=[['own','簽核自己負責的工地','打卡申請、調休：工地負責人簽第一關、工地主管簽第二關（人選依〈工地資料〉）'],
+  var checks=[['own','簽核自己負責的工地','調休申請：工地負責人簽第一關、工地主管簽第二關（人選依〈工地資料〉）。打卡已不需審核'],
     ['proxy','代簽全公司','可替任何工地的負責人／主管簽核,簽名會標註「（'+(r.name||'此權限')+'代簽）」'],
     ['revoke','取消簽核','可退回已核准的調休,並還原排休表']].map(function(c){
       return '<label><input type="checkbox" id="pe_'+c[0]+'"'+((r.sign||{})[c[0]]?' checked':'')+dis(lockAll)+'><span>'+c[1]+'<small>'+esc(c[2])+'</small></span></label>';

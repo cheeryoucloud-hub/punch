@@ -308,11 +308,11 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
   var LIFF_ID = "2011018188-xd2VsV0A";                                   // ← LINE Login 沿用舊的即可
-  var MOBILE_ONLY = true;   // true = 只有「手機的 LINE App」裡才能按打卡（補打卡/班表/概覽等不受限）
+  var MOBILE_ONLY = true;   // true = 只有「手機的 LINE App」裡才能按打卡（班表/概覽等不受限）
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-04-mkup-01";
+  var APP_VERSION = "2026-09-17-noappr-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -436,7 +436,6 @@
   /* ===== 底部分頁（純導覽：點了才載入該頁，不預載） ===== */
   var ICON = {
     punch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21V13h6v8M4 10l8-6 8 6v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/></svg>',
-    makeup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
     transfer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h11l-2-2M20 17H9l2 2"/></svg>',
     schedule: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>',
     notice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>',
@@ -545,7 +544,7 @@
       if (v === 'overview' || v === 'admin') startOverview();
       else if (v === 'schedule') loadSchedule();
       else if (v === 'notice') loadNotice();
-      else if (v === 'makeup') startMakeup();
+      else if (v === 'makeup') startMakeupGone();
       else if (v === 'transfer') startTransfer();
       else { locate(); refreshTimeState(); }        // 打卡頁：重新定位
     } catch (e) { }
@@ -584,7 +583,7 @@
   function tabBar(active) {
     function tab(v, label, svg) { return '<button class="t' + (active === v ? ' on' : '') + '" onclick="navView(\'' + v + '\')">' + svg + '<span>' + label + '</span></button>'; }
     return '<div class="tabbar"><div class="tabinner">' +
-      tab('punch', '打卡', ICON.punch) + tab('makeup', '補打卡', ICON.makeup) +
+      tab('punch', '打卡', ICON.punch) +
       tab('transfer', '調休', ICON.transfer) + tab('schedule', '班表', ICON.schedule) +
       tab('overview', '概覽', ICON.overview) + tab('notice', '公告', ICON.notice) + '</div></div>';
   }
@@ -623,7 +622,7 @@
     initPullRefresh();
     if (P.view === 'bind') { startBindPage(); return; }
     if (P.view === 'overview' || P.view === 'admin') startOverview();
-    else if (P.view === 'makeup') startMakeup();
+    else if (P.view === 'makeup') startMakeupGone();      // 圖文選單若還留著舊的「補打卡」按鈕
     else if (P.view === 'transfer') startTransfer();
     else if (P.view === 'schedule') startSchedule();
     else if (P.view === 'notice') startNotice();
@@ -694,7 +693,7 @@
   }
 
   /* ===== 打卡 ===== */
-  /* 非手機環境：收起打卡鈕,改說明怎麼做（補打卡等其他功能照常可用）*/
+  /* 非手機環境：收起打卡鈕,改說明怎麼做（班表、概覽等其他功能照常可用）*/
   function blockPunchUI() {
     ['btnIn', 'btnOut', 'btnOtOut'].forEach(function (id) {
       var b = document.getElementById(id); if (b) { b.disabled = true; b.style.display = 'none'; }
@@ -704,7 +703,7 @@
       '<div class="nomobile">📱 <b>打卡請用手機</b><br>' +
       '為確保打卡地點正確，只有在<b>手機的 LINE App</b> 裡才能打卡（' + esc(envWhy()) + '）。<br>' +
       '請在手機打開 LINE，從圖文選單進入打卡頁。<br>' +
-      '<span class="sub">忘記打卡可改用下方「補打卡」提出申請，班表、出勤概覽、公告在這裡都能正常看。</span></div>');
+      '<span class="sub">忘記打卡請聯絡人資補登；班表、出勤概覽、公告在這裡都能正常看。</span></div>');
     var ot = document.querySelector('.otlbl'), ob = document.querySelector('.otbtns');
     if (ot) ot.style.display = 'none';
     if (ob) ob.style.display = 'none';
@@ -867,7 +866,7 @@
     if (!isOther) {
       if (!sitesDone || !sitesData.length) { alert('工地清單載入中，請稍候 1~2 秒再按'); return; }
       if (pos.lat == null) {                          // GPS 沒抓到就按 → 給選擇,不再默默記成異常
-        if (!confirm('尚未取得手機定位。\n\n要以「無定位」送出嗎？（會標記異常,需主管核准）\n建議先按「重新定位」再打卡。')) return;
+        if (!confirm('尚未取得手機定位。\n\n要以「無定位」送出嗎？（打卡會記錄,但會標示為定位異常）\n建議先按「重新定位」再打卡。')) return;
       }
     }
     var reason = isOther ? note : '';                 // 外勤：備註即為事由（用來組成打卡地點）
@@ -891,13 +890,13 @@
     ovBusyOff();
     if (!res || !res.ok) { showResult(false, (res && res.msg) || '打卡失敗'); ready(); return; }
     bDone(PBTN, true); PBTN = null;                    // 成功：還原文字但維持停用,避免連按重複打卡
-    var okStatus = (res.status === '正常' || res.status === '待核准');
+    // 打卡一律直接生效（已取消審核）：外勤／定位異常只是多一個標示
     var t = '打卡成功　' + res.time;
     if (res.alsoOut) t = '加班結束　' + res.time + '（已一併登記下班,不用再打下班卡）';
-    if (res.status === '待核准') t = '外勤已送出，待主管核准';
-    else if (res.status !== '正常') t = '已記錄，定位異常（' + res.status + '）';
+    if (res.status === '外勤') t += '（外勤,已記錄）';
+    else if (res.status !== '正常') t += '（已記錄,但定位異常：' + ((res.distance !== '' && res.distance != null) ? ('距工地 ' + res.distance + ' 公尺') : '未取得定位') + '）';
     else if (res.distance !== '') t += '（距工地 ' + res.distance + ' 公尺）';
-    showResult(okStatus, t);
+    showResult(true, t);
     sendCard(res).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1500); });
   }
   function sendCard(res) {
@@ -907,10 +906,9 @@
     } catch (e) { return Promise.resolve(); }
   }
   function buildFlex(res) {
-    var good = (res.status === '正常'), wait = (res.status === '待核准');
-    var isField = res.siteName && String(res.siteName).indexOf('外勤') === 0;
-    var color = good ? '#1d9e75' : (wait ? '#d97706' : '#b91c1c');
-    var title = good ? '✅ 打卡成功' : (wait ? (isField ? '⏳ 外勤待核准' : '⏳ 待核准（定位待確認）') : '⚠️ 打卡（定位異常）');
+    var good = (res.status === '正常'), isField = (res.status === '外勤');
+    var color = good ? '#1d9e75' : (isField ? '#2f6bd8' : '#b91c1c');
+    var title = good ? '✅ 打卡成功' : (isField ? '📍 外勤打卡成功' : '⚠️ 打卡成功（定位異常）');
     function line(k, v) {
       return { type: 'box', layout: 'baseline', spacing: 'sm', contents: [
         { type: 'text', text: k, size: 'sm', color: '#999999', flex: 2 },
@@ -929,78 +927,17 @@
   }
   function showResult(good, txt) { var el = document.getElementById('result'); if (!el) return; el.textContent = txt; el.className = 'result show ' + (good ? 'good' : 'bad'); }
 
-  /* ===== 補打卡 ===== */
-  function startMakeup() {
-    var nowD = new Date();
-    var t = ('0' + nowD.getHours()).slice(-2) + ':' + ('0' + nowD.getMinutes()).slice(-2);
-    var today = nowD.getFullYear() + '-' + ('0' + (nowD.getMonth() + 1)).slice(-2) + '-' + ('0' + nowD.getDate()).slice(-2);
-    document.getElementById('wrap').innerHTML = '<div class="hdr"><h1>補打卡</h1><p>需直屬主管／工地負責人核准</p></div>' +
-      '<div class="pbody">' +
-      '<label class="lbl">日期</label><input type="date" id="mkDate" class="fld" value="' + today + '" max="' + today + '">' +
-      '<label class="lbl">時間（可手動選，或用下方快速鍵）</label><input type="time" id="mkTime" class="fld" value="' + t + '">' +
-      '<div class="mkquick">' +
-        '<button type="button" class="qk" id="mkQ8" onclick="mkQuick(this,\'08:00\')">8:00</button>' +
-        '<button type="button" class="qk" id="mkQ17" onclick="mkQuick(this,\'17:00\')">17:00</button>' +
-      '</div>' +
-      '<label class="lbl">補打原因（必填）</label><input id="mkReason" class="fld" placeholder="例：忘記打上班卡">' +
-      '<div class="mkbtns">' +
-        '<button class="mkgo in" id="mkBtnIn">補打上班</button>' +
-        '<button class="mkgo out" id="mkBtnOut">補打下班</button>' +
-      '</div>' +
-      '<div class="miniwarn">送出後會通知主管，核准後才會生效。</div>' +
-      '<div class="result" id="result"></div></div>' + tabBar('makeup');
-    document.getElementById('mkBtnIn').onclick = function () { makeup('上班', this); };
-    document.getElementById('mkBtnOut').onclick = function () { makeup('下班', this); };
-  }
-  /* 快速鍵：按 8:00 / 17:00 直接帶入並鎖住時間欄;再按一次解鎖回手動 */
-  function mkQuick(btn, hm) {
-    var t = document.getElementById('mkTime');
-    var on = btn.classList.contains('on');
-    document.getElementById('mkQ8').classList.remove('on');
-    document.getElementById('mkQ17').classList.remove('on');
-    if (on) { t.disabled = false; return; }               // 再按一次 → 解鎖手動選
-    btn.classList.add('on');
-    t.value = hm; t.disabled = true;
-  }
-  function makeup(type, btn) {
-    var date = document.getElementById('mkDate').value;
-    var time = document.getElementById('mkTime').value;
-    var reason = document.getElementById('mkReason').value.trim();
-    if (!date) { alert('請選補打日期'); return; }
-    if (!time) { alert('請選補打時間'); return; }
-    if (!reason) { alert('請填補打原因'); return; }
-    var mb = btn;
-    var other = document.getElementById(type === '上班' ? 'mkBtnOut' : 'mkBtnIn');
-    if (other) other.disabled = true;
-    bBusy(mb, '送出中…'); ovBusy('補打申請送出中…請稍候');
-    post({ action: 'makeup', idToken: me.idToken, punchType: type, makeupDate: date, makeupTime: time, reason: reason, device: navigator.platform + ' / LINE' }, { tmo: 45000, noRetry: true })
-      .then(function (res) {
-        ovBusyOff();
-        if (!res || !res.ok) { bDone(mb); if (other) other.disabled = false; showResult(false, (res && res.msg) || '補打失敗'); return; }
-        bDone(mb, true); ovToast('補打申請已送出');
-        showResult(true, '補打申請已送出（' + (res.date || date) + ' ' + type + '補打 ' + res.time + '），待主管核准');
-        sendFlexMsg(buildMakeupFlex(type, (res.date || date) + ' ' + res.time, reason)).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1600); });
-      }).catch(function (e) { ovBusyOff(); bDone(mb); if (other) other.disabled = false; showResult(false, '送出失敗：' + e); });
+  /* ===== 補打卡（2026-09-17 取消）=====
+     圖文選單若還留著舊的「補打卡」按鈕,點進來給說明,不要默默跳到打卡頁 */
+  function startMakeupGone() {
+    document.getElementById('wrap').innerHTML = '<div class="hdr"><h1>補打卡已取消</h1><p>打卡一律以當下打卡為準</p></div>' +
+      '<div class="pbody"><div class="miniwarn" style="margin-top:4px">忘記打卡或打卡頁打不開時，請直接聯絡人資，由人資在後台補登（會留下補登依據）。</div></div>' + tabBar('punch');
   }
   function sendFlexMsg(flex) {
     try {
       if (!liff.isInClient()) return Promise.resolve();   // 外部瀏覽器無法發卡片(LINE 限制)
       return liff.sendMessages([flex]).catch(function () {});
     } catch (e) { return Promise.resolve(); }
-  }
-  function buildMakeupFlex(type, time, reason) {
-    function line(k, v) {
-      return { type: 'box', layout: 'baseline', spacing: 'sm', contents: [
-        { type: 'text', text: k, size: 'sm', color: '#999999', flex: 2 },
-        { type: 'text', text: String(v == null || v === '' ? '-' : v), size: 'sm', color: '#333333', flex: 5, wrap: true }] };
-    }
-    var body = [
-      { type: 'text', text: '📝 已申請補打卡', weight: 'bold', size: 'lg', color: '#d97706' },
-      { type: 'separator', margin: 'md' },
-      line('姓名', me.displayName), line('類型', type + '補打'), line('補打時間', time), line('原因', reason),
-      { type: 'text', text: '待主管審核後可成功登錄。', size: 'sm', color: '#d97706', margin: 'md', wrap: true }];
-    return { type: 'flex', altText: '已申請補打卡 ' + me.displayName,
-      contents: { type: 'bubble', size: 'kilo', body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: body } } };
   }
 
   /* ===== 調休申請 ===== */
@@ -1295,8 +1232,8 @@
     if (!m) return '<div class="muted">—</div>';
     if (m.leave) return '<div class="myleave"><small>今日</small>' + esc(m.leave) + '</div>';
     return '<div class="myday">' +
-      '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班' + (m.inPending ? '（待核准）' : '') + '</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
-      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班' + (m.outPending ? '（待核准）' : '') + '</span><b>' + esc(m.out || '未打卡') + (m.outNext ? '<span class="tag nx" title="隔天凌晨打的卡">隔日</span>' : '') + '</b></div>' +
+      '<div class="cell' + (m.in ? '' : ' miss') + '"><span>上班' + (m.inFlag ? '（' + esc(m.inFlag) + '）' : '') + '</span><b>' + esc(m.in || '未打卡') + '</b></div>' +
+      '<div class="cell' + (m.out ? '' : ' miss') + '"><span>下班' + (m.outFlag ? '（' + esc(m.outFlag) + '）' : '') + '</span><b>' + esc(m.out || '未打卡') + (m.outNext ? '<span class="tag nx" title="隔天凌晨打的卡">隔日</span>' : '') + '</b></div>' +
       '</div>';
   }
   function ovTfActions(x) {
@@ -1320,10 +1257,11 @@
       h += '<div class="muted small">已有人簽核,要取消請聯絡簽核者按「退回」。</div>';
     return h;
   }
-  function ovActions(kind, id, canAct) {
-    if (!canAct) return '';
-    return '<div class="pbtns"><button class="approve" data-k="' + kind + '" data-id="' + esc(id) + '" data-d="approve">核准</button>' +
-           '<button class="reject" data-k="' + kind + '" data-id="' + esc(id) + '" data-d="reject">退回</button></div>';
+  /* 打卡時間旁邊的小標示：異常（超出範圍／無定位）、外勤、補登。打卡已不需審核,只是讓人一眼看到 */
+  function ovFlagTag(f) {
+    if (!f) return '';
+    var c = (f === '外勤') ? 'nx' : ((f === '補登') ? 'wait' : 'bad');
+    return '<span class="tag ' + c + '" style="margin-left:3px">' + esc(f) + '</span>';
   }
   /* 雙簽進度：兩格各自顯示簽了沒 */
   function ovSignBar(x) {
@@ -1429,59 +1367,50 @@
     OV_LOC.push(x);
     return '<a class="maplink" href="javascript:void(0)" onclick="openMapModal(' + (OV_LOC.length - 1) + ')">📍 查看打卡位置</a>';
   }
-  function ovPnCard(x, kind) {
-    var typeTxt = (kind === 'field') ? '（外勤）' : (kind === 'geo' ? '（定位異常）' : '（補打）');
-    var loc = '';
-    if (kind === 'geo' || kind === 'field') {
-      var bits = [];
-      if (x.place) bits.push(esc(x.place));
-      if (x.geo === '超出範圍' || x.geo === '無定位') bits.push('<b class="warn">' + esc(x.geo) + (x.dist ? ('・' + esc(x.dist) + ' 公尺') : '') + '</b>');
-      if (bits.length) loc += '<div class="muted">地點：' + bits.join('　') + '</div>';
-      var ml = ovMapLink(x);
-      if (ml) loc += '<div style="margin-top:4px">' + ml + '</div>';
-      else if (x.geo === '無定位') loc += '<div class="muted" style="margin-top:4px">（手機未取得定位,無座標可查）</div>';
-    }
-    return '<div class="arow' + (x.canAct ? ' pend' : '') + '"><div class="row">' + ovSel(x, 'punch') + '<b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovTag(x.status) + '</div>' +
-      '<div class="muted">' + esc(x.date + ' ' + x.time + '　' + x.punchType) + typeTxt + '</div>' +
-      loc +
-      (x.reason ? '<div class="muted">備註：' + esc(x.reason) + '</div>' : '') +
-      ovActions('punch', x.recordId, x.canAct) + '</div>';
+  /* 當日非正常的打卡：唯讀,沒有核准／退回 */
+  function ovAbnCard(x) {
+    var bits = [];
+    if (x.place) bits.push(esc(x.place));
+    if (x.geo === '超出範圍' || x.geo === '無定位') bits.push('<b class="warn">' + esc(x.geo) + (x.dist ? ('・' + esc(x.dist) + ' 公尺') : '') + '</b>');
+    var loc = bits.length ? ('<div class="muted">地點：' + bits.join('　') + '</div>') : '';
+    var ml = ovMapLink(x);
+    if (ml) loc += '<div style="margin-top:4px">' + ml + '</div>';
+    else if (x.geo === '無定位') loc += '<div class="muted" style="margin-top:4px">（手機未取得定位,無座標可查）</div>';
+    return '<div class="arow"><div class="row"><b>' + esc(x.name) + (x.mine ? '（我）' : '') + '</b>' + ovFlagTag(x.status) + '</div>' +
+      '<div class="muted">' + esc(x.time + '　' + x.punchType) + (x.site ? ('　' + esc(x.site)) : '') + '</div>' +
+      loc + (x.reason ? '<div class="muted">備註：' + esc(x.reason) + '</div>' : '') + '</div>';
   }
   function ovIsPend(x) { var t = String(x.status || ''); return t.indexOf('待') === 0; }
-  /* 待核准：調休／補打卡／外勤／定位異常全部收在這一區,不分日期,位置固定在出勤表下方 */
+  /* 待核准：只剩調休需要簽核（打卡已不需審核）。不分日期,位置固定在出勤表下方 */
   function ovPendBlock(d) {
     var A = d.apps || {}, O = d.older || {};
-    function pick(k) { return (A[k] || []).filter(ovIsPend).concat(O[k] || []); }
-    var g = [['transfer', '調休申請', pick('transfer')], ['makeup', '補打卡申請', pick('makeup')],
-             ['field', '外勤申請', pick('field')], ['geo', '定位異常', pick('geo')]];
-    var all = g.reduce(function (a, x) { return a.concat(x[2]); }, []);
-    if (!all.length) return '<h2>待核准</h2><div class="empty">目前沒有待核准的申請</div>';
+    var all = (A.transfer || []).filter(ovIsPend).concat(O.transfer || []);
+    if (!all.length) return '<h2>待核准</h2><div class="empty">目前沒有待簽核的調休申請</div>';
     var act = all.filter(function (x) { return x.canAct; }).length;
     var h = '<h2>待核准 <span class="tag wait">' + all.length + ' 筆</span>' +
             (act ? ' <span class="tag wait">待你簽核 ' + act + '</span>' : '') + '</h2>' +
-            '<div class="olderhint">不分日期,一直列到核准或退回為止。</div>' +
+            '<div class="olderhint">調休申請不分日期,一直列到核准或退回為止。</div>' +
             (act > 1 ? ('<div class="batchbar"><label><input type="checkbox" id="ovSelAll"> 全選待你簽核的</label>' +
               '<button id="ovBatchGo" disabled>一次核准（0）</button></div>') : '') +
             '<div id="ovPend">';
-    g.forEach(function (x) {
-      if (!x[2].length) return;
-      h += '<h3 class="ovsub">' + x[1] + '（' + x[2].length + '）</h3>';
-      x[2].forEach(function (it) { h += (x[0] === 'transfer') ? ovTfCard(it) : ovPnCard(it, x[0]); });
-    });
+    all.forEach(function (it) { h += ovTfCard(it); });
     return h + '</div>';
   }
-  /* 當日已經處理掉的申請（核准/退回）— 放在待核准後面,純紀錄 */
+  /* 當日非正常的打卡（定位異常／外勤／人資補登）：純紀錄,不需審核。負責人／主管看所轄工地,一般同仁只看自己的 */
+  function ovAbnBlock(d) {
+    var list = d.abn || [];
+    if (!list.length) return '';
+    var h = '<h2>當日異常／外勤打卡 <span class="tag bad">' + list.length + ' 筆</span></h2>' +
+            '<div class="olderhint">這些打卡都已經生效,列出來只是讓你知道,不需要核准。</div>';
+    list.forEach(function (it) { h += ovAbnCard(it); });
+    return h;
+  }
+  /* 當日已經簽完或退回的調休 — 放在後面,純紀錄 */
   function ovDoneBlock(d) {
-    var A = d.apps || {};
-    var g = [['transfer', '調休申請'], ['makeup', '補打卡申請'], ['field', '外勤申請'], ['geo', '定位異常']]
-      .map(function (x) { return [x[0], x[1], (A[x[0]] || []).filter(function (i) { return !ovIsPend(i); })]; });
-    if (!g.reduce(function (a, x) { return a + x[2].length; }, 0)) return '';
-    var h = '<h2>當日申請紀錄</h2>';
-    g.forEach(function (x) {
-      if (!x[2].length) return;
-      h += '<h3 class="ovsub">' + x[1] + '</h3>';
-      x[2].forEach(function (it) { h += (x[0] === 'transfer') ? ovTfCard(it) : ovPnCard(it, x[0]); });
-    });
+    var list = ((d.apps || {}).transfer || []).filter(function (i) { return !ovIsPend(i); });
+    if (!list.length) return '';
+    var h = '<h2>當日調休紀錄</h2>';
+    list.forEach(function (it) { h += ovTfCard(it); });
     return h;
   }
   function renderOverview(d, isCache) {
@@ -1506,16 +1435,17 @@
         g.people.forEach(function (pp) {
           if (pp.leave) { html += '<tr><td class="nm">' + esc(pp.name) + '</td><td colspan="2" style="color:#0a7d55;font-weight:600">' + esc(pp.leave) + '</td></tr>'; return; }
           var miss = pp.in ? '' : ' class="miss"';
-          var ci = pp.in ? (esc(pp.in) + (pp.inPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
-          var co = pp.out ? ((pp.outNext ? '<b>' + esc(pp.out) + '</b><span class="tag nx" title="隔天凌晨打的卡">隔日</span>' : esc(pp.out)) + (pp.outPending ? '<span class="tag wait" style="margin-left:3px">待核准</span>' : '')) : '未打卡';
+          var ci = pp.in ? (esc(pp.in) + ovFlagTag(pp.inFlag)) : '未打卡';
+          var co = pp.out ? ((pp.outNext ? '<b>' + esc(pp.out) + '</b><span class="tag nx" title="隔天凌晨打的卡">隔日</span>' : esc(pp.out)) + ovFlagTag(pp.outFlag)) : '未打卡';
           html += '<tr' + miss + '><td class="nm">' + esc(pp.name) + '</td><td' + (pp.in ? '' : ' class="nopunch"') + '>' + ci + '</td><td' + (pp.out ? '' : ' class="nopunch"') + '>' + co + '</td></tr>';
         });
         html += '</table></div>';
       });
     }
 
-    html += ovPendBlock(d);      // 待核准：固定在出勤表下方,不分日期
-    html += ovDoneBlock(d);      // 當日已處理的紀錄
+    html += ovPendBlock(d);      // 待簽核的調休：固定在出勤表下方,不分日期
+    html += ovAbnBlock(d);       // 當日異常／外勤打卡（唯讀）
+    html += ovDoneBlock(d);      // 當日已處理的調休
     html += '<button class="refresh" id="ovRefresh">↻ 重新整理</button>';
     html += tabBar('overview');
     w.innerHTML = html;
@@ -1649,9 +1579,7 @@
     btn.classList.remove('off');
     btn.innerHTML = '<span class="sp"></span>' + word + '中…';       // 按鈕本身也變成處理中
     ovBusy(word + '中…請稍候');
-    var body = (kind === 'transfer')
-      ? { action: 'actTransfer', idToken: me.idToken, id: id, decision: decision, stage: stage || '' }
-      : { action: 'approve', idToken: me.idToken, recordId: id, decision: decision };
+    var body = { action: 'actTransfer', idToken: me.idToken, id: id, decision: decision, stage: stage || '' };   // 只剩調休需要簽核
     post(body, { tmo: 45000, noRetry: true }).then(function (res) {
       if (!res || !res.ok) {
         ovBusyOff();
