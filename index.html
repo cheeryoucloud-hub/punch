@@ -163,6 +163,9 @@
     animation:ldslide 1.05s cubic-bezier(.4,0,.2,1) infinite; }
   @keyframes ldslide{ 0%{ transform:translateX(-100%); } 100%{ transform:translateX(365%); } }
   @media (prefers-reduced-motion: reduce){ #ldBar i{ animation:none; width:100%; opacity:.6; } }
+  #slowTip{ position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:10000;
+    width:max-content; max-width:calc(100vw - 32px); background:#24332E; color:#fff; font-size:13.5px; font-weight:700;
+    padding:10px 16px; border-radius:22px; box-shadow:0 8px 24px rgba(20,30,40,.28); pointer-events:none; text-align:center; }
   #ovBusy{ position:fixed; inset:0; z-index:9998; display:none; align-items:center; justify-content:center; background:rgba(15,30,26,.42); }
   #ovBusy .bx{ background:#fff; color:var(--ink); font-size:15px; font-weight:800; padding:16px 22px; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.22); display:flex; align-items:center; }
   #ovBusy .sp{ border-color:rgba(14,124,102,.25); border-top-color:var(--teal); width:16px; height:16px; }
@@ -312,7 +315,7 @@
   var GAS_URL = "https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0fQMOqUjyRWm_RastD9YY-fkST9Lzaqg5Pq0gP18Af3/exec";
 
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-17-noappr-04";
+  var APP_VERSION = "2026-09-22-net-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -391,18 +394,27 @@
     if (typeof opts === 'number') opts = { tmo: opts };
     opts = opts || {};
     ldOn();
-    return _postTry(body, 1, opts).then(
-      function (o) { ldOff(); return o; },
-      function (e) { ldOff(); throw e; });
+    var st = { retry: false }, slowT = opts.quiet ? 0 : setTimeout(function () { SLOW.push(st); slowTip(); }, 5000);   // quiet：背景預抓,不打擾
+    function fin() { clearTimeout(slowT); var i = SLOW.indexOf(st); if (i >= 0) { SLOW.splice(i, 1); slowTip(); } ldOff(); }
+    return _postTry(body, 1, opts, st).then(
+      function (o) { fin(); return o; },
+      function (e) { fin(); throw e; });
   }
-  var POST_TIMEOUT = 10000;                    // 行動網路常見「掛住不回」,逾時才能觸發重試
-  function _postTry(body, _try, opts) {
+  /* Google Apps Script 偶爾會卡十幾～幾十秒,或回 Google 的錯誤頁(不是 JSON)。
+     讀取類：逾時/失敗自動重試,每次等久一點(12→20→30 秒)。
+       舊版固定 10 秒就放棄重打,但被放棄的那次在 Google 端其實還在跑,
+       早上大家同時打卡時,一直重打只會把 Google 那邊塞得更滿。
+     寫入類(打卡/申請/簽核)：絕不自動重試 —— 第一發可能已成功,重試會寫出第二筆。 */
+  var POST_TMO = [12000, 20000, 30000];
+  /** 給使用者看的錯誤：'送出失敗：' + e 直接是中文,不會出現「Error: wtimeout」 */
+  function netErr(msg, write) { var e = new Error(msg); e.wtimeout = !!write; e.toString = function () { return msg; }; return e; }
+  function _postTry(body, _try, opts, st) {
     _try = _try || 1; opts = opts || {};
-    var tmo = opts.tmo;
+    var tmo = opts.tmo ? (opts.noRetry ? opts.tmo : opts.tmo * _try) : POST_TMO[_try - 1];
     var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var timer = null;
     var timeout = new Promise(function (_, rej) {
-      timer = setTimeout(function () { if (ac) try { ac.abort(); } catch (e) { } rej(new Error('timeout')); }, tmo || POST_TIMEOUT);
+      timer = setTimeout(function () { if (ac) try { ac.abort(); } catch (e) { } rej(new Error('timeout')); }, tmo);
     });
     var req = fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                                body: JSON.stringify(body), signal: ac ? ac.signal : undefined })
@@ -412,13 +424,28 @@
       .then(function (t) {
         var o = null; try { o = JSON.parse(t); } catch (e) { o = null; }
         if (o) return o;
-        throw new Error('bad-json');
+        throw new Error('bad-json');                    // 多半是 Google 的 404/503 錯誤頁
       })
       .catch(function (e) {
-        // 寫入類(打卡/申請/簽核)不能自動重試 —— 第一發可能已成功,重試會寫出第二筆
-        if (!opts.noRetry && _try < 3) return new Promise(function (res) { setTimeout(res, 600 * _try); }).then(function () { return _postTry(body, _try + 1, opts); });
-        throw new Error(opts.noRetry ? 'wtimeout' : '伺服器忙碌或連線不穩，請再按一次');
+        if (!opts.noRetry && _try < POST_TMO.length) {
+          if (st) { st.retry = true; if (SLOW.indexOf(st) >= 0) slowTip(); }
+          return new Promise(function (res) { setTimeout(res, 800 * _try); }).then(function () { return _postTry(body, _try + 1, opts, st); });
+        }
+        if (navigator.onLine === false) throw netErr('目前沒有網路連線，請確認網路後再試', !!opts.noRetry);
+        if (opts.noRetry) throw netErr('Google 伺服器沒有回應，無法確定是否已送出。請到「概覽」確認，沒有再重送（避免重複）', true);
+        throw netErr('Google 伺服器忙碌或回應太慢（已自動重試 ' + (_try - 1) + ' 次），請稍後再按一次');
       });
+  }
+  /** 寫入沒回應時結果未知,不要冠上「失敗」 */
+  function errText(e, pre) { return (e && e.wtimeout) ? String(e) : pre + '：' + e; }
+  /* 慢速提示：超過 5 秒還沒回來就在底部顯示「仍在等待」,免得以為當機 */
+  var SLOW = [];
+  function slowTip() {
+    var el = document.getElementById('slowTip');
+    if (!SLOW.length) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'slowTip'; document.body.appendChild(el); }
+    var re = SLOW.some(function (s) { return s.retry; });
+    el.textContent = re ? '伺服器較慢，已自動重試，請稍候…' : '伺服器回應較慢，仍在等待…';
   }
 
   /* 預抓：公告與本月班表若本地沒快取,背景先抓一份 —— 之後點分頁就是秒開。
@@ -426,10 +453,10 @@
   function warmPages() {
     try {
       if (P.view !== 'notice' && !lcGet('ntc'))
-        post({ action: 'notices', idToken: me.idToken }).then(function (r) { if (r && r.ok) lcSet('ntc', r); }).catch(function () { });
+        post({ action: 'notices', idToken: me.idToken }, { quiet: true }).then(function (r) { if (r && r.ok) lcSet('ntc', r); }).catch(function () { });
       var d = new Date(), ck = 'sc_' + d.getFullYear() + '_' + (d.getMonth() + 1) + '_' + (typeof VIEW_AS !== 'undefined' ? VIEW_AS : '');
       if (P.view !== 'schedule' && !lcGet(ck))
-        post({ action: 'schedule', idToken: me.idToken, year: d.getFullYear(), month: d.getMonth() + 1, viewAs: '' })
+        post({ action: 'schedule', idToken: me.idToken, year: d.getFullYear(), month: d.getMonth() + 1, viewAs: '' }, { quiet: true })
           .then(function (r) { if (r && r.ok) lcSet(ck, r); }).catch(function () { });
     } catch (e) { }
   }
@@ -881,7 +908,7 @@
            punchType: type, lat: pos.lat, lng: pos.lng, reason: reason, note: note, device: navigator.platform + ' / LINE', env: ENV },
          { tmo: 45000, noRetry: true })                       // 打卡是寫入:等久一點,但絕不自動重試
       .then(onDone).catch(function (e) {
-        if (String(e).indexOf('wtimeout') >= 0)
+        if (e && e.wtimeout && navigator.onLine !== false)
           showResult(false, '伺服器回應逾時。這筆打卡「可能已經成功」——請稍後到「概覽」確認今天的紀錄,若已有就不要再打一次。');
         else showResult(false, '送出失敗：' + e);
         ready();
@@ -1038,7 +1065,7 @@
         showResult(true, '調休申請已送出，待主管簽核');
         sendFlexMsg(buildTransferFlex(res, reason)).then(function () { setTimeout(function () { if (window.liff && liff.closeWindow) liff.closeWindow(); }, 1600); });
       })
-      .catch(function (e) { ovBusyOff(); bDone(btn); showResult(false, '送出失敗：' + e); });
+      .catch(function (e) { ovBusyOff(); bDone(btn); showResult(false, errText(e, '送出失敗')); });
   }
   function buildTransferFlex(res, reason) {
     function line(k, v) {
@@ -1496,7 +1523,7 @@
         }
         ovToast(msg);
         ovSilentRefresh();
-      }).catch(function (e) { ovBusyOff(); bDone(goBtn); ovToast('批次核准失敗：' + e, true); ovSilentRefresh(); });
+      }).catch(function (e) { ovBusyOff(); bDone(goBtn); ovToast(errText(e, '批次核准失敗'), true); ovSilentRefresh(); });
     };
     Array.prototype.forEach.call(document.querySelectorAll('.pbtns button'), function (b) {
       if (b.getAttribute('data-del')) { b.onclick = function () { ovDelTf(b.getAttribute('data-del'), b); }; return; }
@@ -1537,7 +1564,7 @@
       ovBusyOff();
       if (!res || !res.ok) { bDone(btn); ovToast((res && res.msg) || '刪除失敗', true); return; }
       ovToast('已刪除'); startOverview();
-    }).catch(function (e) { ovBusyOff(); bDone(btn); ovToast('刪除失敗：' + e, true); });
+    }).catch(function (e) { ovBusyOff(); bDone(btn); ovToast(errText(e, '刪除失敗'), true); });
   }
   /* 簽核完就地改這張卡：整張結案就淡出移除,只簽掉一格就把該格打勾 */
   function ovCardDone(box, res, word, kind, stage) {
@@ -1600,7 +1627,7 @@
       ovCardDone(box, res, word, kind, stage);
       ovToast(res.done === false ? ('已簽核,等' + (res.waiting || '另一方')) : ('已' + word));
       ovSilentRefresh();                                             // 背景對帳,不擋畫面
-    }).catch(function (e) { ovBusyOff(); ovToast('操作失敗：' + e, true); ovSilentRefresh(); });
+    }).catch(function (e) { ovBusyOff(); ovToast(errText(e, '操作失敗'), true); ovSilentRefresh(); });
   }
 </script>
 </body>
