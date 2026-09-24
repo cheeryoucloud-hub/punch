@@ -77,6 +77,11 @@
   .mstep .lb{ font-weight:800; font-size:13.5px; padding:0 6px; min-width:96px; text-align:center; }
   .mstep .now{ background:var(--brand); color:#fff; border-radius:8px; padding:6px 12px; font-size:12.5px; font-weight:800; cursor:pointer; }
   .mstep .dp{ position:relative; } .mstep .dp input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .segsw{ display:flex; gap:3px; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:4px; }
+  .segsw button{ font-family:inherit; border:none; background:transparent; color:var(--muted); border-radius:8px;
+    padding:7px 14px; font-size:12.5px; font-weight:800; cursor:pointer; white-space:nowrap; }
+  .segsw button:hover{ background:var(--surface-2); }
+  .segsw button.on{ background:var(--brand); color:#fff; }
 
   .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:13px; margin-bottom:18px; }
   .stat{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:15px 16px; display:flex; gap:12px; align-items:flex-start; }
@@ -310,6 +315,11 @@
     border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
   .btn .bsp,.btn.rj .bsp{ border-color:var(--brand-soft); border-top-color:var(--brand); }
   button.bsy{ opacity:.9; cursor:default; }
+  #perfTip{ position:fixed; right:12px; bottom:10px; z-index:60; font-size:11.5px; line-height:1.5; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:4px 10px; opacity:.88; cursor:default;
+    white-space:nowrap; max-width:calc(100vw - 24px); overflow:hidden; text-overflow:ellipsis; }
+  #perfTip b{ color:var(--text); font-weight:700; }
+  #perfTip .slow{ color:var(--danger); font-weight:800; }
   #slowTip{ position:fixed; left:50%; bottom:88px; transform:translateX(-50%); z-index:96; max-width:calc(100vw - 32px);
     background:#27332D; color:#fff; font-size:13.5px; font-weight:700; padding:10px 18px; border-radius:22px;
     box-shadow:0 8px 26px rgba(20,30,40,.28); animation:tin .18s ease-out; pointer-events:none; }
@@ -513,7 +523,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbx6fUEPK68TdacpmWVzk-0t_0
 var TOKEN='', ME={name:'',role:''};
 var state={ screen:'overview', ym:'', ovDate:'', ovCur:'', roster:null };
   // ===== 自動破快取：改版後使用者不用手動 Ctrl+F5 =====
-  var APP_VERSION = "2026-09-22-net-01";
+  var APP_VERSION = "2026-09-24-perf-01";
   (function ensureFresh() {
     try {
       var cur = new URLSearchParams(location.search).get('_v');
@@ -579,6 +589,7 @@ function _api(action,payload,opts){
   var body=Object.assign({action:action,token:TOKEN},payload||{});
   var long=API_LONG.test(action), read=!long&&apiIsRead(action,payload);
   var st={retry:false}, slowT=(opts&&opts.quiet)?0:setTimeout(function(){ SLOW.push(st); slowTip(); },5000);   // quiet：背景更新,不打擾
+  var t0=Date.now();
   function attempt(n){
     return _apiOnce(body,long?120000:API_TRY_TMO[n-1]).catch(function(e){
       if(read&&n<API_TRY_TMO.length){ st.retry=true; if(SLOW.indexOf(st)>=0) slowTip();
@@ -588,6 +599,7 @@ function _api(action,payload,opts){
   }
   return attempt(1).then(function(o){
     clearTimeout(slowT); var i=SLOW.indexOf(st); if(i>=0){ SLOW.splice(i,1); slowTip(); }
+    perfNote(action, Date.now()-t0, o&&o.ms, o&&o.netErr);
     if(o&&o.msg&&/登入逾時|未登入/.test(o.msg)){ doLogout(); }
     else if(o&&!o.ok&&/^你的權限沒有開放/.test(o.msg||'')&&action!=='admin_whoami'){ setTimeout(function(){ refreshPerm(true); },0); }   // 權限剛被改過
     return o;
@@ -613,6 +625,26 @@ function apiErrMsg(e,read,tries){
   if(k==='timeout') return 'Google 伺服器回應太慢'+again+'，請稍後再試';
   if(k==='bad-json') return 'Google 伺服器暫時忙碌'+again+'，請稍後再試';
   return '連線失敗'+again+'，請確認網路後再試';
+}
+/* 效能提示（右下角）：每次請求分成「伺服器執行」與「排隊／傳輸」兩段。
+   伺服器執行＝後端回傳的 ms（程式真正跑的時間）;排隊／傳輸＝來回總時間扣掉它（Google 排隊＋網路）。
+   哪一段大,就知道慢在誰身上。滑鼠移上去看最近 8 次。 */
+var PERF=[], PERF_NAME={admin_overview:'總覽',admin_punchLog:'打卡明細',admin_rosterTable:'輪休表／休假登錄',admin_report:'出勤表',
+  admin_reportBatch:'整工地出勤表',admin_transferList:'調休申請',admin_noticeList:'公告',admin_reminderList:'LINE提醒',admin_listBase:'基本資料',
+  admin_empList:'員工名單',admin_whoami:'權限確認',admin_permList:'權限設定',admin_leaveAt:'調休假別',admin_maintInfo:'維護資訊',
+  admin_lineSettings:'LINE設定',admin_period:'期別',login:'登入'};
+function perfNote(action, total, server, netErr){
+  var nm=PERF_NAME[action]||action.replace(/^admin_/,'');
+  var sv=(typeof server==='number')?server:null, wait=sv!=null?Math.max(0,total-sv):null;
+  var rec={nm:nm,total:total,sv:sv,wait:wait,err:!!netErr,at:new Date()};
+  PERF.unshift(rec); if(PERF.length>8) PERF.length=8;
+  var el=$('perfTip'); if(!el){ el=document.createElement('div'); el.id='perfTip'; document.body.appendChild(el); }
+  function sec(ms){ return (ms/1000).toFixed(1)+' 秒'; }
+  function line(r){ return r.nm+'：'+(r.err?'失敗（'+sec(r.total)+'）':(r.sv!=null?('伺服器 '+sec(r.sv)+'｜排隊／傳輸 '+sec(r.wait)):('來回 '+sec(r.total)))); }
+  var r=PERF[0];
+  el.innerHTML='<b>'+esc(r.nm)+'</b>　'+(r.err?'<span class="slow">失敗</span>（'+sec(r.total)+'）':
+    (r.sv!=null?('伺服器 <b>'+sec(r.sv)+'</b>　排隊／傳輸 '+(r.wait>5000?'<span class="slow">'+sec(r.wait)+'</span>':'<b>'+sec(r.wait)+'</b>')):('來回 <b>'+sec(r.total)+'</b>')));
+  el.title='最近 8 次（新→舊）\n'+PERF.map(function(x){ return x.at.toTimeString().substring(0,8)+'　'+line(x); }).join('\n');
 }
 /* 慢速提示：請求超過 5 秒還沒回來,底部顯示「仍在等待」,免得以為當機 */
 var SLOW=[];
@@ -725,7 +757,7 @@ function empKey(){ return 'qy_emps2_'+(ME.name||'')+'_'+(ME.role||''); }   // �
 function empLoad(quiet){
   if(EMP_BUSY) return EMP_BUSY;
   var gen=EMP_GEN;
-  EMP_BUSY=api('admin_empList',{},{quiet:quiet}).then(function(j){
+  EMP_BUSY=api('admin_empList',{all:true},{quiet:quiet}).then(function(j){
     if(!j.ok||!j.list) return null;
     var all=j.list;
     var punch=all.every(function(e){ return 'punch' in e; })
@@ -740,8 +772,16 @@ function empLoad(quiet){
   }).then(function(o){ if(gen===EMP_GEN) EMP_BUSY=null; return o; },function(){ if(gen===EMP_GEN) EMP_BUSY=null; return null; });
   return EMP_BUSY;
 }
-function getEmps(needPunchOnly, cb){
-  function pick(o){ return o?(needPunchOnly?o.punch:o.all):null; }
+/** 離職的人：離職日當天仍算在職,之後就不再出現在下拉。
+    when 給 'yyyy/MM/dd'（看某一天）或 'yyyy/MM/01'（看某個月）;給 'all' ＝不過濾（備份／查舊資料用）*/
+function empsOn(list, when){
+  if(!list || when==='all') return list;
+  var w=String(when||todayStr());
+  return list.filter(function(e){ return !e.left || w<=String(e.left); });
+}
+function monthWhen(){ return state.ym+'/01'; }     // 月份類畫面：該月 1 日還在職就列（離職當月仍要出現）
+function getEmps(needPunchOnly, cb, when){
+  function pick(o){ return o?empsOn(needPunchOnly?o.punch:o.all, when):null; }
   if(!EMP_MEM){ try{ var o=JSON.parse(localStorage.getItem(empKey())||'null');
     if(o&&o.all&&o.punch&&Date.now()-o.t<EMP_KEEP) EMP_MEM=o; }catch(e){} }
   if(EMP_MEM){ cb(pick(EMP_MEM)); if(Date.now()-EMP_MEM.t>EMP_FRESH) empLoad(true); return; }   // 背景更新不重繪,下次進頁自然是新的
@@ -944,13 +984,12 @@ var PLOG_DATA=null, PLOG_LIST=[];
 function scPunchLog(){
   state.ym=PLOG.date.substring(0,7);            // 讓其他頁面的月份跟這天一致
   $('main').innerHTML=pageTop('打卡明細',false)+
-    '<div class="toolbar">'+plStep()+
+    '<div class="toolbar">'+plStep()+plScopeSw()+
     '<select id="plSite" onchange="plSet(\'site\',this.value)"><option value="__all__">全部工地</option></select>'+
     '<select id="plName" onchange="plSet(\'name\',this.value)"><option value="">全部人員</option></select>'+
     '<select id="plType" onchange="plSet(\'type\',this.value)">'+['','上班','下班','加班結束'].map(function(x){return '<option value="'+x+'"'+(PLOG.type===x?' selected':'')+'>'+(x||'全部類型')+'</option>';}).join('')+'</select>'+
     '<select id="plMethod" onchange="plSet(\'method\',this.value)">'+['','定點','外勤','補登'].map(function(x){return '<option value="'+x+'"'+(PLOG.method===x?' selected':'')+'>'+(x||'全部方式')+'</option>';}).join('')+'</select>'+
     '<select id="plStatus" onchange="plSet(\'status\',this.value)" title="異常＝超出範圍／無定位、外勤、人資補登、作廢"><option value="">全部狀態</option><option value="abn"'+(PLOG.status==='abn'?' selected':'')+'>只看異常</option></select>'+
-    '<select id="plScope" onchange="plScopeSet(this.value)"><option value="day"'+(PLOG.scope==='day'?' selected':'')+'>當天</option><option value="month"'+(PLOG.scope==='month'?' selected':'')+'>整月</option></select>'+
     '<span class="spacer"></span>'+
     (canEd('punchlog')?'<button class="add" onclick="addPunchRow()">＋ 新增補登</button>':'')+
     '<span class="hint" id="plCount"></span></div>'+
@@ -969,8 +1008,19 @@ function plStep(){
     '<button onclick="plShift(1)">›</button>'+
     '<span class="now" onclick="plSetDate(todayStr())">今日</span></div>';
 }
+/** 日／月切換：放在日期左右鍵旁邊,比夾在篩選下拉裡明顯 */
+function plScopeSw(){
+  return '<div class="segsw">'+['day','month'].map(function(k){
+    return '<button class="'+(PLOG.scope===k?'on':'')+'" onclick="plScopeSet(\''+k+'\')">'+(k==='day'?'看單日':'看整月')+'</button>';
+  }).join('')+'</div>';
+}
 function plLabel(){ return PLOG.scope==='month' ? ('📅 '+PLOG.date.substring(0,7)+'（整月）') : ('📅 '+PLOG.date+'（'+plWk(PLOG.date)+'）'); }
-function plScopeSet(v){ PLOG.scope=(v==='month')?'month':'day'; var lb=$('plLb'); if(lb) lb.textContent=plLabel(); loadPunchLog(); }
+function plScopeSet(v){
+  PLOG.scope=(v==='month')?'month':'day';
+  var lb=$('plLb'); if(lb) lb.textContent=plLabel();
+  var sw=document.querySelector('.segsw'); if(sw) sw.outerHTML=plScopeSw();
+  loadPunchLog();
+}
 function plShift(n){
   var q=PLOG.date.split('/'), dt=new Date(+q[0],+q[1]-1,+q[2]);
   if(PLOG.scope==='month') dt=new Date(+q[0],+q[1]-1+n,1); else dt.setDate(dt.getDate()+n);   // 整月檢視時箭頭換月
@@ -1052,7 +1102,7 @@ function addPunchRow(){
           PLOG.date=dt.replace(/-/g,'/'); plSetDate(dt);      // 跳到該天,馬上看得到這筆
         });
       });
-  });
+  },PLOG.date);
 }
 function openLogMap(i){
   var r=PLOG_LIST[i]; if(!r)return;
@@ -1575,7 +1625,7 @@ function scTransfer(){
     var opts='<option value="__all__">全部工地</option>'+Object.keys(st).map(function(s){return '<option>'+esc(s)+'</option>';}).join('');
     if($('tfFormSite')) $('tfFormSite').innerHTML=opts;
     if($('tfSite')) $('tfSite').innerHTML=opts;
-    tfFillEmp(); });
+    tfFillEmp(); },monthWhen());
   $('tfEmp').onchange=tfAuto; $('tfOrig').onchange=tfAuto; $('tfSite').onchange=loadTransfer;
   loadTransfer();
 }
@@ -2078,7 +2128,7 @@ function scReport(){
     var st={}; list.forEach(function(e){ if(e.site)st[e.site]=1; });
     put('rpSite','<option value="__all__">全部工地</option>'+Object.keys(st).map(function(s){return '<option>'+esc(s)+'</option>';}).join(''));
     rpFillEmp();
-  });
+  },monthWhen());
 }
 function rpFillEmp(){
   var site=$('rpSite')?$('rpSite').value:'__all__'; var list=(state.rpEmps||[]).filter(function(e){ return site==='__all__'||e.site===site; });
@@ -2316,6 +2366,12 @@ function renderBase(which,edit){
   $('baseBody').innerHTML=h+'</tbody></table>';
 }
 function filterBase(){ var q=($('baseSearch').value||'').toLowerCase(); var tb=$('baseTable'); if(!tb)return; Array.prototype.forEach.call(tb.tBodies[0].rows,function(tr){ tr.style.display = tr.textContent.toLowerCase().indexOf(q)>=0?'':'none'; }); }
+/** 離職日與在職狀態連動：填日期→離職;清空→回在職（存檔時後端也會再做一次）*/
+function empLeaveSync(){
+  var d=$('f_離職日'), st=$('f_在職狀態'); if(!d||!st) return;
+  if(d.value) st.value='離職';
+  else if(st.value==='離職') st.value='在職';
+}
 function editBase(which,idx){
   var meta=BASE_META[which], t=state.base[which], heads=t.headers.filter(Boolean);
   var row=idx==null?{}:t.rows[idx]; var origKey=idx==null?'':row[meta.key];
@@ -2332,6 +2388,10 @@ function editBase(which,idx){
         return '<option value="'+esc(o)+'"'+(cur===o?' selected':'')+(lock?' disabled':'')+'>'+esc(o)+(lock?'（僅管理員可指定）':'')+'</option>'; }).join('')+
         '</select><div class="hint" style="margin-top:4px">選項來自上方「各權限可做的事」</div></div>';
     }
+    if(which==='emp'&&x==='離職日') return '<div class="field"><label>離職日（填了就自動改成「離職」,留空＝在職）</label>'+
+      '<input id="f_'+x+'" type="date" value="'+esc(String(v||'').replace(/[/]/g,'-').substring(0,10))+'" onchange="empLeaveSync()">'+
+      '<div class="hint" style="margin-top:4px">離職日<b>當天仍算在職</b>。這天以後：不能打卡、不出現在名單／輪休表／出勤表,'+
+      '但<b>以前的紀錄完全不受影響</b>（打卡明細、出勤表、調休都查得到）。</div></div>';
     if(x==='在職狀態') return '<div class="field"><label>在職狀態</label><select id="f_'+x+'"><option'+(String(v)==='在職'?' selected':'')+'>在職</option><option'+(String(v)==='離職'?' selected':'')+'>離職</option></select></div>';
     if(x==='是否需打卡') return '<div class="field"><label>是否需打卡</label><select id="f_'+x+'"><option'+(String(v)!=='否'?' selected':'')+'>是</option><option'+(String(v)==='否'?' selected':'')+'>否</option></select></div>';
     if(x==='狀態'&&which==='geo') return '<div class="field"><label>狀態</label><select id="f_'+x+'"><option'+(String(v)!=='停用'?' selected':'')+'>啟用</option><option'+(String(v)==='停用'?' selected':'')+'>停用</option></select></div>';
@@ -2561,7 +2621,7 @@ function scExport(){
     var st={}; list.forEach(function(e){ if(e.site)st[e.site]=1; });
     put('expSite','<option value="__all__">全工地</option>'+Object.keys(st).sort().map(function(x){return '<option>'+esc(x)+'</option>';}).join(''));
     expSum();
-  });
+  },monthWhen());
   expSum();
 }
 function expToggle(el){ el.classList.toggle('on'); expSum(); }
@@ -2668,7 +2728,7 @@ function renderMaint(j){
     var sites={}; list.forEach(function(e){ if(e.site)sites[e.site]=1; });
     put('mtSite','<option value="__all__">全部工地</option>'+Object.keys(sites).sort().map(function(x){return '<option>'+esc(x)+'</option>';}).join(''));
     put('mtEmp','<option value="">全部人員</option>'+list.map(function(e){return '<option value="'+esc(e.empId)+'">'+esc(e.name)+'（'+esc(e.site||'—')+'）</option>';}).join(''));
-  });
+  },'all');
 }
 function doArchive(){
   var y=$('mtYear').value;
